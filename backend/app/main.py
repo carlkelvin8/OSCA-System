@@ -1,0 +1,96 @@
+"""
+OSCA System - FastAPI Application Entry Point
+Python 3.12 | FastAPI 0.115.x | 2026 Best Practices
+"""
+import structlog
+from contextlib import asynccontextmanager
+
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
+from fastapi.responses import ORJSONResponse
+
+from app.api.v1.router import api_router
+from app.config import settings
+from app.core.exceptions import register_exception_handlers
+from app.database import engine
+from app.database import Base
+
+logger = structlog.get_logger(__name__)
+
+
+# ── Lifespan (startup / shutdown) ─────────────────────────────────────────────
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Application startup and shutdown events."""
+    logger.info(
+        "osca_startup",
+        app_name=settings.APP_NAME,
+        version=settings.APP_VERSION,
+        env=settings.APP_ENV,
+        fr_model=settings.FR_MODEL,
+    )
+
+    # Create DB tables (Alembic handles production migrations)
+    if settings.APP_ENV == "testing":
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+
+    # Pre-warm facial recognition model on startup
+    if settings.FR_MODEL == "insightface":
+        from app.services.facial_recognition import FacialRecognitionService
+        fr_service = FacialRecognitionService()
+        await fr_service.initialize()
+        app.state.fr_service = fr_service
+        logger.info("fr_model_loaded", model=settings.FR_MODEL)
+
+    yield
+
+    # Shutdown
+    logger.info("osca_shutdown")
+    await engine.dispose()
+
+
+# ── App Instance ──────────────────────────────────────────────────────────────
+app = FastAPI(
+    title=settings.APP_NAME,
+    version=settings.APP_VERSION,
+    description=(
+        "Web-Based Attendance and Inventory Management System "
+        "with Facial Recognition and Barcode Scanning\n\n"
+        "**NAAP-Villamor | Office of Sports and Cultural Affairs (OSCA)**"
+    ),
+    docs_url=settings.docs_url,
+    redoc_url=settings.redoc_url,
+    openapi_url="/openapi.json" if not settings.is_production else None,
+    default_response_class=ORJSONResponse,  # Faster JSON serialization
+    lifespan=lifespan,
+)
+
+# ── Middleware ─────────────────────────────────────────────────────────────────
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.ALLOWED_ORIGINS,
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
+    allow_headers=["Authorization", "Content-Type", "X-Request-ID"],
+    expose_headers=["X-Request-ID"],
+)
+app.add_middleware(GZipMiddleware, minimum_size=1000)
+
+# ── Exception Handlers ────────────────────────────────────────────────────────
+register_exception_handlers(app)
+
+# ── Routers ───────────────────────────────────────────────────────────────────
+app.include_router(api_router, prefix=settings.API_PREFIX)
+
+
+# ── Health Check ──────────────────────────────────────────────────────────────
+@app.get("/health", tags=["Health"], include_in_schema=False)
+async def health_check() -> dict:
+    return {
+        "status": "healthy",
+        "app": settings.APP_NAME,
+        "version": settings.APP_VERSION,
+        "env": settings.APP_ENV,
+    }

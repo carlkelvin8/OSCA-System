@@ -1,0 +1,176 @@
+/**
+ * Axios API client with JWT interceptors.
+ * Automatically refreshes access tokens on 401.
+ */
+import axios, { AxiosInstance, AxiosError } from "axios";
+import Cookies from "js-cookie";
+
+const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost/api/v1";
+
+// ── Client Instance ───────────────────────────────────────────────────────────
+
+const api: AxiosInstance = axios.create({
+  baseURL: API_BASE,
+  headers: { "Content-Type": "application/json" },
+  timeout: 30000,
+});
+
+// ── Request Interceptor — Attach Bearer Token ─────────────────────────────────
+
+api.interceptors.request.use((config) => {
+  const token = Cookies.get("access_token");
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
+
+// ── Response Interceptor — Auto Token Refresh ─────────────────────────────────
+
+let isRefreshing = false;
+let failedQueue: Array<{
+  resolve: (value: string) => void;
+  reject: (reason: unknown) => void;
+}> = [];
+
+const processQueue = (error: AxiosError | null, token: string | null = null) => {
+  failedQueue.forEach((prom) => {
+    if (error) {
+      prom.reject(error);
+    } else {
+      prom.resolve(token!);
+    }
+  });
+  failedQueue = [];
+};
+
+api.interceptors.response.use(
+  (response) => response,
+  async (error: AxiosError) => {
+    const originalRequest = error.config as typeof error.config & { _retry?: boolean };
+
+    if (error.response?.status === 401 && !originalRequest._retry) {
+      if (isRefreshing) {
+        return new Promise((resolve, reject) => {
+          failedQueue.push({ resolve, reject });
+        }).then((token) => {
+          originalRequest.headers!["Authorization"] = `Bearer ${token}`;
+          return api(originalRequest);
+        });
+      }
+
+      originalRequest._retry = true;
+      isRefreshing = true;
+
+      const refreshToken = Cookies.get("refresh_token");
+      if (!refreshToken) {
+        processQueue(error, null);
+        isRefreshing = false;
+        window.location.href = "/login";
+        return Promise.reject(error);
+      }
+
+      try {
+        const { data } = await axios.post(`${API_BASE}/auth/refresh`, {
+          refresh_token: refreshToken,
+        });
+
+        Cookies.set("access_token", data.access_token, {
+          secure: process.env.NODE_ENV === "production",
+          sameSite: "strict",
+          expires: 1 / 96, // 15 minutes
+        });
+        Cookies.set("refresh_token", data.refresh_token, {
+          secure: process.env.NODE_ENV === "production",
+          sameSite: "strict",
+          expires: 7,
+        });
+
+        processQueue(null, data.access_token);
+        originalRequest.headers!["Authorization"] = `Bearer ${data.access_token}`;
+        return api(originalRequest);
+      } catch (refreshError) {
+        processQueue(refreshError as AxiosError, null);
+        Cookies.remove("access_token");
+        Cookies.remove("refresh_token");
+        window.location.href = "/login";
+        return Promise.reject(refreshError);
+      } finally {
+        isRefreshing = false;
+      }
+    }
+
+    return Promise.reject(error);
+  }
+);
+
+export default api;
+
+// ── API Functions ─────────────────────────────────────────────────────────────
+
+export const authApi = {
+  login: (email: string, password: string) =>
+    api.post("/auth/login", { email, password }),
+  logout: () => api.post("/auth/logout"),
+  me: () => api.get("/auth/me"),
+  refresh: (refresh_token: string) =>
+    api.post("/auth/refresh", { refresh_token }),
+};
+
+export const usersApi = {
+  list: (params?: Record<string, string | number | boolean>) =>
+    api.get("/users/", { params }),
+  get: (id: string) => api.get(`/users/${id}`),
+  create: (data: Record<string, unknown>) => api.post("/users/register", data),
+  update: (id: string, data: Record<string, unknown>) =>
+    api.patch(`/users/${id}`, data),
+  deactivate: (id: string) => api.delete(`/users/${id}`),
+};
+
+export const attendanceApi = {
+  createSession: (data: Record<string, unknown>) =>
+    api.post("/attendance/sessions", data),
+  listSessions: (params?: Record<string, string | number | boolean>) =>
+    api.get("/attendance/sessions", { params }),
+  scan: (data: Record<string, unknown>) =>
+    api.post("/attendance/scan", data),
+  enroll: (data: Record<string, unknown>) =>
+    api.post("/attendance/enroll", data),
+  getRecords: (params?: Record<string, string | number | boolean>) =>
+    api.get("/attendance/records", { params }),
+};
+
+export const inventoryApi = {
+  listEquipment: (params?: Record<string, string | number | boolean>) =>
+    api.get("/inventory/equipment", { params }),
+  getEquipment: (id: string) => api.get(`/inventory/equipment/${id}`),
+  getEquipmentByBarcode: (barcode: string) =>
+    api.get(`/inventory/equipment/barcode/${barcode}`),
+  createEquipment: (data: Record<string, unknown>) =>
+    api.post("/inventory/equipment", data),
+  updateEquipment: (id: string, data: Record<string, unknown>) =>
+    api.patch(`/inventory/equipment/${id}`, data),
+  issueBorrowingId: (instructorId: string) =>
+    api.post(`/inventory/borrowing-ids/${instructorId}`),
+  borrow: (data: Record<string, unknown>) => api.post("/inventory/borrow", data),
+  return: (data: Record<string, unknown>) => api.post("/inventory/return", data),
+  listTransactions: (params?: Record<string, string | number | boolean>) =>
+    api.get("/inventory/transactions", { params }),
+};
+
+export const reportsApi = {
+  attendancePdf: (params?: Record<string, string>) =>
+    api.get("/reports/attendance/pdf", {
+      params,
+      responseType: "blob",
+    }),
+  attendanceXlsx: (params?: Record<string, string>) =>
+    api.get("/reports/attendance/xlsx", {
+      params,
+      responseType: "blob",
+    }),
+  inventoryPdf: () => api.get("/reports/inventory/pdf", { responseType: "blob" }),
+  inventoryXlsx: () =>
+    api.get("/reports/inventory/xlsx", { responseType: "blob" }),
+  dashboardSummary: () => api.get("/reports/dashboard/summary"),
+};

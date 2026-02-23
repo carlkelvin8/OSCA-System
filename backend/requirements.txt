@@ -1,0 +1,70 @@
+# ============================================================
+# OSCA Backend - Python Dependencies
+# Python 3.12 | FastAPI 0.115.x | 2026 Best Practices
+# ============================================================
+
+# --- Web Framework ---
+fastapi[standard]==0.115.6
+uvicorn[standard]==0.32.1
+gunicorn==23.0.0
+
+# --- Data Validation ---
+pydantic==2.10.4
+pydantic-settings==2.7.0
+email-validator==2.2.0
+
+# --- Database ---
+sqlalchemy==2.0.37
+asyncpg==0.30.0
+alembic==1.14.0
+pgvector==0.3.6
+
+# --- Authentication & Security ---
+python-jose[cryptography]==3.3.0
+passlib[argon2]==1.7.4
+python-multipart==0.0.20
+
+# --- Caching ---
+redis[asyncio]==5.2.1
+
+# --- Background Tasks ---
+celery[redis]==5.4.0
+flower==2.0.1               # Celery monitoring UI
+
+# --- Facial Recognition ---
+insightface==0.7.3
+onnxruntime==1.20.1         # CPU; swap for onnxruntime-gpu if CUDA available
+opencv-python-headless==4.10.0.84
+numpy==1.26.4
+Pillow==11.1.0
+scikit-learn==1.6.0         # Cosine similarity utilities
+
+# --- Liveness Detection ---
+# silent-face-anti-spoofing is installed separately (see Dockerfile)
+
+# --- File Storage (MinIO / S3) ---
+boto3==1.35.92
+botocore==1.35.92
+
+# --- Barcode & QR Code ---
+python-barcode==0.15.1
+qrcode[pil]==8.0
+
+# --- PDF Generation ---
+weasyprint==62.3
+
+# --- Excel Export ---
+openpyxl==3.1.5
+
+# --- Email ---
+fastapi-mail==1.4.2
+
+# --- HTTP Client (for internal calls) ---
+httpx==0.28.1
+
+# --- Utilities ---
+python-dotenv==1.0.1
+structlog==24.4.0
+orjson==3.10.13             # Ultra-fast JSON serialization
+anyio==4.8.0
+tenacity==9.0.0             # Retry logic

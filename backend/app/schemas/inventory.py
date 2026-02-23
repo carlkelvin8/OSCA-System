@@ -1,0 +1,131 @@
+"""Inventory and borrowing schemas."""
+import uuid
+from datetime import datetime
+
+from pydantic import Field, field_validator
+
+from app.models.inventory import (
+    EquipmentCategory,
+    EquipmentCondition,
+    TransactionStatus,
+)
+from app.schemas.common import OSCABaseModel
+
+
+# ── Equipment Schemas ──────────────────────────────────────────────────────────
+
+class EquipmentCreate(OSCABaseModel):
+    name: str = Field(min_length=1, max_length=200)
+    description: str | None = None
+    category: EquipmentCategory
+    condition: EquipmentCondition = EquipmentCondition.GOOD
+    total_quantity: int = Field(ge=1, default=1)
+    storage_location: str | None = Field(default=None, max_length=200)
+    sport_or_art: str | None = Field(default=None, max_length=100)
+    acquisition_date: datetime | None = None
+    acquisition_cost: float | None = Field(default=None, ge=0)
+    notes: str | None = None
+
+
+class EquipmentUpdate(OSCABaseModel):
+    name: str | None = Field(default=None, max_length=200)
+    description: str | None = None
+    category: EquipmentCategory | None = None
+    condition: EquipmentCondition | None = None
+    total_quantity: int | None = Field(default=None, ge=1)
+    storage_location: str | None = Field(default=None, max_length=200)
+    sport_or_art: str | None = Field(default=None, max_length=100)
+    acquisition_cost: float | None = Field(default=None, ge=0)
+    notes: str | None = None
+    is_active: bool | None = None
+
+
+class EquipmentRead(OSCABaseModel):
+    id: uuid.UUID
+    name: str
+    description: str | None
+    category: EquipmentCategory
+    condition: EquipmentCondition
+    barcode: str
+    barcode_image_key: str | None
+    total_quantity: int
+    available_quantity: int
+    storage_location: str | None
+    sport_or_art: str | None
+    acquisition_date: datetime | None
+    acquisition_cost: float | None
+    is_active: bool
+    notes: str | None
+    created_at: datetime
+
+
+# ── BorrowingID Schemas ────────────────────────────────────────────────────────
+
+class BorrowingIDRead(OSCABaseModel):
+    id: uuid.UUID
+    instructor_id: uuid.UUID
+    instructor_name: str = ""
+    qr_code: str
+    qr_image_key: str | None
+    is_active: bool
+    issued_at: datetime
+
+
+# ── Borrow Transaction Schemas ─────────────────────────────────────────────────
+
+class BorrowItemRequest(OSCABaseModel):
+    """One equipment barcode scanned during borrowing."""
+    equipment_barcode: str
+    quantity: int = Field(ge=1, default=1)
+
+
+class BorrowTransactionCreate(OSCABaseModel):
+    """
+    Step 1: PE Instructor scans Borrowing ID QR.
+    Step 2: Scan each equipment barcode.
+    Step 3: Confirm.
+    """
+    borrowing_id_qr: str = Field(description="QR code value from the Borrowing ID card")
+    items: list[BorrowItemRequest] = Field(min_length=1)
+    expected_return: datetime
+    notes: str | None = None
+
+    @field_validator("expected_return")
+    @classmethod
+    def return_must_be_future(cls, v: datetime) -> datetime:
+        from datetime import timezone
+        if v <= datetime.now(tz=timezone.utc):
+            raise ValueError("expected_return must be in the future")
+        return v
+
+
+class BorrowTransactionItemRead(OSCABaseModel):
+    id: uuid.UUID
+    equipment_id: uuid.UUID
+    equipment_name: str = ""
+    equipment_barcode: str = ""
+    quantity: int
+    is_returned: bool
+    returned_at: datetime | None
+    return_condition: EquipmentCondition | None
+    notes: str | None
+
+
+class BorrowTransactionRead(OSCABaseModel):
+    id: uuid.UUID
+    instructor_id: uuid.UUID
+    instructor_name: str = ""
+    status: TransactionStatus
+    borrowed_at: datetime
+    expected_return: datetime
+    returned_at: datetime | None
+    overdue_notified: bool
+    notes: str | None
+    items: list[BorrowTransactionItemRead]
+
+
+class ReturnRequest(OSCABaseModel):
+    """PE Instructor scans their Borrowing ID and each item being returned."""
+    borrowing_id_qr: str
+    items: list[BorrowItemRequest]
+    notes: str | None = None

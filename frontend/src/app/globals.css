@@ -1,0 +1,10 @@
+@import "tailwindcss";
+
+:root {
+  --osca-navy: #1E3A5F;
+  --osca-gold: #C9A84C;
+}
+
+body {
+  @apply bg-gray-50 text-gray-900 antialiased;
+}

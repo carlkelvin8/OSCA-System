@@ -1,0 +1,374 @@
+"""
+Attendance endpoints: sessions, kiosk face-scan, facial enrollment, records.
+"""
+import base64
+import time
+import uuid
+from datetime import UTC, datetime
+from typing import Annotated
+
+import structlog
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.core.dependencies import AdminOnly, AdminOrCoach, CurrentUser, StaffOnly, get_db
+from app.core.exceptions import NotFoundError
+from app.models.attendance import (
+    AttendanceRecord,
+    AttendanceScanType,
+    FaceEmbedding,
+    ScanAttempt,
+    ScanResult,
+    Session,
+)
+from app.models.audit import AuditLog
+from app.models.user import User, UserRole
+from app.schemas.attendance import (
+    AttendanceRecordRead,
+    EnrollmentRequest,
+    EnrollmentResponse,
+    FaceScanRequest,
+    FaceScanResponse,
+    SessionCreate,
+    SessionRead,
+)
+from app.schemas.common import MessageResponse, PaginatedResponse
+from app.services.facial_recognition import FacialRecognitionService
+
+router = APIRouter()
+logger = structlog.get_logger(__name__)
+
+
+def _get_fr_service(request: Request) -> FacialRecognitionService:
+    """Retrieve pre-warmed FR service from app state."""
+    return request.app.state.fr_service
+
+
+# ── Sessions ──────────────────────────────────────────────────────────────────
+
+@router.post(
+    "/sessions",
+    response_model=SessionRead,
+    status_code=status.HTTP_201_CREATED,
+    summary="Create a new training/event session (Admin/Coach)",
+)
+async def create_session(
+    body: SessionCreate,
+    current_user: AdminOrCoach,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> SessionRead:
+    session = Session(
+        **body.model_dump(),
+        created_by_id=current_user.id,
+    )
+    db.add(session)
+    await db.commit()
+    await db.refresh(session)
+
+    result = SessionRead.model_validate(session)
+    result.attendance_count = 0
+    return result
+
+
+@router.get("/sessions", response_model=PaginatedResponse[SessionRead], summary="List sessions")
+async def list_sessions(
+    current_user: CurrentUser,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    sport_or_art: str | None = Query(None),
+    is_active: bool | None = Query(None),
+) -> PaginatedResponse[SessionRead]:
+    query = select(Session)
+    # Coaches only see their assigned sport's sessions
+    if current_user.role == UserRole.COACH and current_user.assigned_sport:
+        query = query.where(Session.sport_or_art == current_user.assigned_sport)
+    if sport_or_art:
+        query = query.where(Session.sport_or_art == sport_or_art)
+    if is_active is not None:
+        query = query.where(Session.is_active == is_active)
+
+    total = (await db.execute(select(func.count()).select_from(query.subquery()))).scalar_one()
+    query = query.offset((page - 1) * page_size).limit(page_size).order_by(Session.scheduled_start.desc())
+    sessions = (await db.execute(query)).scalars().all()
+
+    items = []
+    for s in sessions:
+        count_result = await db.execute(
+            select(func.count(AttendanceRecord.id)).where(AttendanceRecord.session_id == s.id)
+        )
+        sr = SessionRead.model_validate(s)
+        sr.attendance_count = count_result.scalar_one()
+        items.append(sr)
+
+    return PaginatedResponse(items=items, total=total, page=page, page_size=page_size,
+                             pages=(total + page_size - 1) // page_size)
+
+
+# ── Face Enrollment ───────────────────────────────────────────────────────────
+
+@router.post(
+    "/enroll",
+    response_model=EnrollmentResponse,
+    summary="Enroll a student's face (Admin only)",
+)
+async def enroll_face(
+    body: EnrollmentRequest,
+    _admin: AdminOnly,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    fr_service: Annotated[FacialRecognitionService, Depends(_get_fr_service)],
+) -> EnrollmentResponse:
+    # Verify user exists and has given consent
+    result = await db.execute(select(User).where(User.id == body.user_id))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise NotFoundError("User", str(body.user_id))
+    if not user.biometric_consent:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Student has not provided biometric consent (R.A. 10173)",
+        )
+
+    # Decode images
+    images_bytes = []
+    for img_b64 in body.images_base64:
+        try:
+            images_bytes.append(base64.b64decode(img_b64))
+        except Exception:
+            raise HTTPException(status_code=400, detail="Invalid base64 image data")
+
+    # Generate embedding
+    embedding, model_used, minio_keys = await fr_service.enroll_face(
+        user_id=str(body.user_id),
+        images_bytes=images_bytes,
+    )
+
+    # Upsert embedding
+    existing = await db.execute(select(FaceEmbedding).where(FaceEmbedding.user_id == body.user_id))
+    face_emb = existing.scalar_one_or_none()
+    if face_emb:
+        face_emb.embedding = embedding
+        face_emb.images_used = len(images_bytes)
+        face_emb.model_used = model_used
+        face_emb.minio_image_keys = ",".join(minio_keys)
+        face_emb.updated_at = datetime.now(UTC)
+    else:
+        face_emb = FaceEmbedding(
+            user_id=body.user_id,
+            embedding=embedding,
+            model_used=model_used,
+            images_used=len(images_bytes),
+            minio_image_keys=",".join(minio_keys),
+        )
+        db.add(face_emb)
+
+    user.is_face_enrolled = True
+    db.add(AuditLog(
+        user_id=body.user_id,
+        action="FACE_ENROLLED",
+        resource_type="FaceEmbedding",
+        resource_id=str(face_emb.id) if face_emb.id else None,
+        status="success",
+        details={"model": model_used, "images_count": len(images_bytes)},
+    ))
+    await db.commit()
+    await db.refresh(face_emb)
+
+    logger.info("face_enrolled", user_id=str(body.user_id), model=model_used)
+    return EnrollmentResponse(
+        success=True,
+        user_id=body.user_id,
+        embedding_id=face_emb.id,
+        images_processed=len(images_bytes),
+        message="Face enrolled successfully",
+    )
+
+
+# ── Kiosk Face Scan ────────────────────────────────────────────────────────────
+
+@router.post(
+    "/scan",
+    response_model=FaceScanResponse,
+    summary="Kiosk: time-in or time-out via facial recognition",
+)
+async def face_scan(
+    body: FaceScanRequest,
+    request: Request,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    fr_service: Annotated[FacialRecognitionService, Depends(_get_fr_service)],
+) -> FaceScanResponse:
+    start_time = time.monotonic()
+
+    # Decode image
+    try:
+        image_bytes = base64.b64decode(body.image_base64)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid base64 image")
+
+    # Verify session exists and is active
+    session_result = await db.execute(
+        select(Session).where(Session.id == body.session_id, Session.is_active == True)
+    )
+    session = session_result.scalar_one_or_none()
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found or not active")
+
+    # Fetch all embeddings for comparison
+    emb_result = await db.execute(
+        select(FaceEmbedding).join(User).where(User.is_active == True, User.is_face_enrolled == True)
+    )
+    all_embeddings = emb_result.scalars().all()
+
+    if not all_embeddings:
+        return FaceScanResponse(
+            result=ScanResult.NO_FACE_DETECTED,
+            processing_time_ms=int((time.monotonic() - start_time) * 1000),
+            message="No enrolled students in system",
+        )
+
+    # Run facial recognition
+    match_result = await fr_service.identify_face(
+        image_bytes=image_bytes,
+        stored_embeddings=[(emb.user_id, emb.embedding) for emb in all_embeddings],
+    )
+
+    processing_ms = int((time.monotonic() - start_time) * 1000)
+    kiosk_ip = request.client.host if request.client else None
+
+    # Log scan attempt
+    scan_attempt = ScanAttempt(
+        scan_type=body.scan_type,
+        result=match_result.result,
+        matched_user_id=match_result.user_id,
+        confidence_score=match_result.confidence,
+        liveness_score=match_result.liveness_score,
+        kiosk_ip=kiosk_ip,
+        processing_time_ms=processing_ms,
+        failure_reason=match_result.failure_reason,
+    )
+    db.add(scan_attempt)
+
+    if match_result.result != ScanResult.SUCCESS:
+        await db.commit()
+        return FaceScanResponse(
+            result=match_result.result,
+            confidence_score=match_result.confidence,
+            liveness_score=match_result.liveness_score,
+            processing_time_ms=processing_ms,
+            message=match_result.failure_reason or "Recognition failed",
+        )
+
+    # Update attendance record
+    user_id = match_result.user_id
+    att_result = await db.execute(
+        select(AttendanceRecord).where(
+            AttendanceRecord.student_id == user_id,
+            AttendanceRecord.session_id == body.session_id,
+        )
+    )
+    record = att_result.scalar_one_or_none()
+
+    if body.scan_type == AttendanceScanType.TIME_IN:
+        if record:
+            # Already timed in — idempotent response
+            matched_user = await db.get(User, user_id)
+            return FaceScanResponse(
+                result=ScanResult.SUCCESS,
+                matched_user_id=user_id,
+                matched_user_name=matched_user.full_name if matched_user else None,
+                confidence_score=match_result.confidence,
+                liveness_score=match_result.liveness_score,
+                attendance_record_id=record.id,
+                processing_time_ms=processing_ms,
+                message="Already timed in for this session",
+            )
+        record = AttendanceRecord(
+            student_id=user_id,
+            session_id=body.session_id,
+            time_in=datetime.now(UTC),
+            time_in_confidence=match_result.confidence,
+            time_in_liveness_score=match_result.liveness_score,
+        )
+        db.add(record)
+
+    elif body.scan_type == AttendanceScanType.TIME_OUT:
+        if not record or not record.time_in:
+            await db.commit()
+            return FaceScanResponse(
+                result=ScanResult.FAILED_RECOGNITION,
+                processing_time_ms=processing_ms,
+                message="No time-in record found for this session",
+            )
+        now = datetime.now(UTC)
+        record.time_out = now
+        record.time_out_confidence = match_result.confidence
+        record.time_out_liveness_score = match_result.liveness_score
+        record.duration_minutes = int((now - record.time_in).total_seconds() / 60)
+        record.is_complete = True
+
+    await db.commit()
+    await db.refresh(record)
+
+    matched_user = await db.get(User, user_id)
+    logger.info(
+        "face_scan_success",
+        user_id=str(user_id),
+        scan_type=body.scan_type,
+        confidence=match_result.confidence,
+        processing_ms=processing_ms,
+    )
+
+    return FaceScanResponse(
+        result=ScanResult.SUCCESS,
+        matched_user_id=user_id,
+        matched_user_name=matched_user.full_name if matched_user else None,
+        confidence_score=match_result.confidence,
+        liveness_score=match_result.liveness_score,
+        attendance_record_id=record.id,
+        processing_time_ms=processing_ms,
+        message=f"{'Time-in' if body.scan_type == AttendanceScanType.TIME_IN else 'Time-out'} recorded",
+    )
+
+
+# ── Attendance Records ─────────────────────────────────────────────────────────
+
+@router.get(
+    "/records",
+    response_model=PaginatedResponse[AttendanceRecordRead],
+    summary="Get attendance records",
+)
+async def get_attendance_records(
+    current_user: CurrentUser,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    session_id: uuid.UUID | None = Query(None),
+    student_id: uuid.UUID | None = Query(None),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=200),
+) -> PaginatedResponse[AttendanceRecordRead]:
+    query = select(AttendanceRecord)
+
+    # Students only see their own records
+    if current_user.role == UserRole.STUDENT:
+        query = query.where(AttendanceRecord.student_id == current_user.id)
+    elif student_id:
+        query = query.where(AttendanceRecord.student_id == student_id)
+
+    if session_id:
+        query = query.where(AttendanceRecord.session_id == session_id)
+
+    total = (await db.execute(select(func.count()).select_from(query.subquery()))).scalar_one()
+    query = query.offset((page - 1) * page_size).limit(page_size).order_by(AttendanceRecord.time_in.desc())
+    records = (await db.execute(query)).scalars().all()
+
+    items = []
+    for r in records:
+        ar = AttendanceRecordRead.model_validate(r)
+        student = await db.get(User, r.student_id)
+        if student:
+            ar.student_name = student.full_name
+            ar.student_number = student.student_id
+        items.append(ar)
+
+    return PaginatedResponse(items=items, total=total, page=page, page_size=page_size,
+                             pages=(total + page_size - 1) // page_size)

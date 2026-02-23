@@ -1,0 +1,49 @@
+# Code Review Report: OSCA System (NAAP Villamor)
+
+## Executive Summary
+I have reviewed the architecture and codebase for the **OSCA Management System**. Overall, the project demonstrates an excellent, modern technology stack (Python 3.12, FastAPI, Next.js 15, pgvector, InsightFace). The codebase is well-structured, modular, and follows many enterprise-grade best practices for both scalability and maintainability.
+
+Below is a detailed breakdown of the system’s strengths, along with specific recommendations for improvement from a Senior Software Engineer's perspective.
+
+---
+
+## Backend (FastAPI + Python)
+
+### Strengths 🏆
+1. **Modern SQLAlchemy 2.0**: Excellent use of the updated SQLAlchemy 2.0 syntax (`Mapped`, `mapped_column`, `select()`). The models are heavily type-hinted and clearly structured.
+2. **Security & Hashing**: Using `passlib[argon2]` for password hashing is top-tier and future-proof compared to standard bcrypt.
+3. **Facial Recognition Architecture**: The pipeline (MiniFASNet for liveness $\to$ RetinaFace/ArcFace for embeddings) is well thought out. Mean pooling of embeddings during enrollment is a fantastic touch for improved accuracy.
+4. **Separation of Concerns**: The project effectively separates routing (`app/api`), database models (`app/models`), and business logic (`app/services`).
+
+### Areas for Improvement 🛠️
+1. **$O(N)$ Python Similarity Search**: 
+   > [!WARNING]
+   > In [facial_recognition.py](file:///c:/Users/joshu/OneDrive/Documents/Project/Inventory%20Management%20System/backend/app/services/facial_recognition.py), the [identify_face](file:///c:/Users/joshu/OneDrive/Documents/Project/Inventory%20Management%20System/backend/app/services/facial_recognition.py#177-246) method fetches all stored embeddings and iterates through them using a Python-based cosine similarity loop. As the user base grows, this $O(N)$ loop will bottleneck the CPU and slow down the event loop.
+   > **Recommendation**: Since you are using `pgvector`, shift the similarity search entirely to the database level. Use an HNSW or IVFFlat index and perform a query like: 
+   > `SELECT user_id, 1 - (embedding <=> :query) as similarity FROM face_embeddings ORDER BY embedding <=> :query LIMIT 1;`
+   
+2. **Global Interpreter Lock (GIL) Blocking**:
+   In [facial_recognition.py](file:///c:/Users/joshu/OneDrive/Documents/Project/Inventory%20Management%20System/backend/app/services/facial_recognition.py), CPU-bound tasks (model inference via InsightFace) are offloaded using `run_in_executor(None, ...)`, which uses the default `ThreadPoolExecutor`. Because of Python's GIL, heavy CPU operations in threads can still degrade the performance of the main `asyncio` loop.
+   > **Recommendation**: Switch to a `ProcessPoolExecutor` for the facial recognition pipeline, or consider extracting the AI inference into a dedicated microservice (or Celery worker) to keep the FastAPI event loop perfectly responsive.
+
+3. **Database Initialization**:
+   In [main.py](file:///c:/Users/joshu/OneDrive/Documents/Project/Inventory%20Management%20System/backend/app/main.py), the lifespan creates tables synchronously for testing: `await conn.run_sync(Base.metadata.create_all)`. While acceptable for tests, it's safer to rely entirely on Alembic for schema generation universally to ensure tests perfectly match production migrations.
+
+---
+
+## Frontend (Next.js + React Context)
+
+### Strengths 🏆
+1. **Modern Stack**: Utilizing Next.js 15 (App Router), TailwindCSS 4, and Zustand demonstrates a progressive UI architecture.
+2. **State Persistence**: Using Zustand's `persist` middleware with `sessionStorage` correctly handles temporary data survival across tab reloads without bloating local storage permanently.
+
+### Areas for Improvement 🛠️
+1. **JWT Storage & XSS Vulnerability**:
+   > [!CAUTION]
+   > In [useAuthStore.ts](file:///c:/Users/joshu/OneDrive/Documents/Project/Inventory%20Management%20System/frontend/src/store/useAuthStore.ts), the `access_token` and `refresh_token` are saved via `js-cookie`. Because JavaScript can read them (`js-cookie` does not, and cannot, set `HttpOnly` flags since it runs in the browser), they are highly vulnerable to Cross-Site Scripting (XSS) attacks. If an attacker injects malicious JS into the app, they can instantly steal the user's session.
+   > **Recommendation**: Shift the token management to an `HttpOnly` cookie set directly by the FastAPI backend during the `/login` response. If Next.js Server Actions or route handlers are used, they can act as a secure proxy. The browser JS should never directly touch the raw JWT.
+
+## Conclusion
+This is an incredibly solid foundation. The most critical immediate action item is **securing the JWTs in HttpOnly cookies** on the frontend, followed by **optimizing the facial recognition similarity search** to utilize `pgvector` inside the PostgreSQL database rather than computing it in Python.
+
+Let me know if you would like me to assist in implementing any of these recommendations!
