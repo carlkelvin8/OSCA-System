@@ -178,12 +178,23 @@ class FacialRecognitionService:
         self,
         image_bytes: bytes,
         stored_embeddings: list[tuple[uuid.UUID, list[float]]],
+        similarity_threshold: float | None = None,
+        liveness_threshold: float | None = None,
+        liveness_enabled: bool | None = None,
     ) -> FRMatchResult:
         """
         Identify a face against all stored embeddings.
         Runs liveness check first if enabled.
+
+        similarity_threshold / liveness_threshold / liveness_enabled override
+        static settings when provided (used for runtime admin configuration).
         """
         loop = asyncio.get_event_loop()
+
+        # Resolve effective thresholds (runtime config takes precedence)
+        _sim_threshold = similarity_threshold if similarity_threshold is not None else settings.FACE_SIMILARITY_THRESHOLD
+        _live_threshold = liveness_threshold if liveness_threshold is not None else settings.FR_LIVENESS_THRESHOLD
+        _live_enabled = liveness_enabled if liveness_enabled is not None else settings.FR_LIVENESS_ENABLED
 
         def _run():
             img = self._decode_image(image_bytes)
@@ -191,9 +202,9 @@ class FacialRecognitionService:
 
             # Liveness check
             liveness_score = None
-            if settings.FR_LIVENESS_ENABLED and self._liveness_model:
+            if _live_enabled and self._liveness_model:
                 liveness_score = self._liveness_model.predict(img_rgb)
-                if liveness_score < settings.FR_LIVENESS_THRESHOLD:
+                if liveness_score < _live_threshold:
                     return FRMatchResult(
                         result=ScanResult.FAILED_LIVENESS,
                         liveness_score=liveness_score,
@@ -223,14 +234,14 @@ class FacialRecognitionService:
                     best_score = score
                     best_user_id = user_id
 
-            if best_score < settings.FACE_SIMILARITY_THRESHOLD:
+            if best_score < _sim_threshold:
                 return FRMatchResult(
                     result=ScanResult.FAILED_THRESHOLD,
                     confidence=best_score,
                     liveness_score=liveness_score,
                     failure_reason=(
                         f"Face not recognized (confidence={best_score:.3f}, "
-                        f"threshold={settings.FACE_SIMILARITY_THRESHOLD}). "
+                        f"threshold={_sim_threshold}). "
                         "Ensure good lighting and face the camera directly."
                     ),
                 )

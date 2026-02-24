@@ -20,6 +20,7 @@ import {
   LayoutDashboard,
   ChevronRight,
   Bell,
+  ClipboardList,
 } from "lucide-react";
 import { useAuthStore } from "@/store/useAuthStore";
 import type { UserRole } from "@/types";
@@ -32,43 +33,49 @@ const navItems: {
   icon: React.ElementType;
   roles: UserRole[];
 }[] = [
-  {
-    href: "/dashboard",
-    label: "Dashboard",
-    icon: LayoutDashboard,
-    roles: ["admin", "coach", "pe_instructor", "director", "student"],
-  },
-  {
-    href: "/dashboard/attendance",
-    label: "Attendance",
-    icon: CalendarCheck,
-    roles: ["admin", "coach", "student"],
-  },
-  {
-    href: "/dashboard/inventory",
-    label: "Inventory",
-    icon: Package,
-    roles: ["admin", "pe_instructor"],
-  },
-  {
-    href: "/dashboard/users",
-    label: "Users",
-    icon: Users,
-    roles: ["admin"],
-  },
-  {
-    href: "/dashboard/reports",
-    label: "Reports",
-    icon: BarChart3,
-    roles: ["admin", "coach", "director"],
-  },
-  {
-    href: "/kiosk",
-    label: "Kiosk Mode",
-    icon: Camera,
-    roles: ["admin"],
-  },
-];
+    {
+      href: "/dashboard",
+      label: "Dashboard",
+      icon: LayoutDashboard,
+      roles: ["admin", "coach", "pe_instructor", "director", "student"],
+    },
+    {
+      href: "/dashboard/attendance",
+      label: "Attendance",
+      icon: CalendarCheck,
+      roles: ["admin", "coach", "student"],
+    },
+    {
+      href: "/dashboard/inventory",
+      label: "Inventory",
+      icon: Package,
+      roles: ["admin", "pe_instructor", "coach"],
+    },
+    {
+      href: "/dashboard/inventory/requests",
+      label: "Equipment Requests",
+      icon: ClipboardList,
+      roles: ["admin", "director", "coach", "pe_instructor"],
+    },
+    {
+      href: "/dashboard/users",
+      label: "Users",
+      icon: Users,
+      roles: ["admin"],
+    },
+    {
+      href: "/dashboard/reports",
+      label: "Reports",
+      icon: BarChart3,
+      roles: ["admin", "coach", "director"],
+    },
+    {
+      href: "/kiosk",
+      label: "Attendance Scan",
+      icon: Camera,
+      roles: ["admin", "coach", "pe_instructor"],
+    },
+  ];
 
 // ── Role badge label ───────────────────────────────────────────────────────────
 
@@ -101,7 +108,7 @@ function useBreadcrumb(pathname: string) {
 // ── Layout ────────────────────────────────────────────────────────────────────
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
-  const { user, isAuthenticated, logout, fetchCurrentUser } = useAuthStore();
+  const { user, isAuthenticated, isLoading, logout, fetchCurrentUser } = useAuthStore();
   const router = useRouter();
   const pathname = usePathname();
   const crumbs = useBreadcrumb(pathname);
@@ -110,19 +117,24 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     fetchCurrentUser();
   }, [fetchCurrentUser]);
 
+  // Only redirect after auth check is complete — avoids race with Zustand hydration
   useEffect(() => {
-    if (!isAuthenticated && user === null) {
+    if (!isLoading && !isAuthenticated && user === null) {
       router.push("/login");
     }
-  }, [isAuthenticated, user, router]);
+  }, [isLoading, isAuthenticated, user, router]);
 
-  if (!user) {
+  // Show spinner while auth is resolving (isLoading) or user not yet loaded
+  if (isLoading || (!isAuthenticated && user === null)) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#f5f6f8]">
         <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-[#2563eb]" />
       </div>
     );
   }
+
+  // TypeScript narrowing: after the early return above, user must be non-null here
+  if (!user) return null;
 
   const visibleNav = navItems.filter((item) => item.roles.includes(user.role));
 
@@ -162,11 +174,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               <Link
                 key={item.href}
                 href={item.href}
-                className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-[13px] font-medium transition-colors ${
-                  isActive
-                    ? "bg-[#2563eb] text-white"
-                    : "text-[#94a3b8] hover:text-[#e2e8f0] hover:bg-white/6"
-                }`}
+                className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-[13px] font-medium transition-colors ${isActive
+                  ? "bg-[#2563eb] text-white"
+                  : "text-[#94a3b8] hover:text-[#e2e8f0] hover:bg-white/6"
+                  }`}
               >
                 <Icon size={17} className="shrink-0" />
                 {item.label}

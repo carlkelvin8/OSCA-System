@@ -112,3 +112,37 @@ async def dashboard_summary(
 ) -> dict:
     report_service = ReportService(db)
     return await report_service.get_dashboard_summary()
+
+
+@router.get(
+    "/inventory/monthly",
+    summary="Monthly inventory summary (Admin / Staff)",
+    response_model=None,
+)
+async def inventory_monthly(
+    _user: NotStudent,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    year: int = Query(..., ge=2020, le=2100, description="Report year"),
+    month: int = Query(..., ge=1, le=12, description="Report month (1-12)"),
+    format: str = Query("json", pattern="^(json|pdf|xlsx)$", description="Response format"),
+) -> StreamingResponse | dict:
+    report_service = ReportService(db)
+    result = await report_service.generate_inventory_monthly_report(year=year, month=month)
+
+    if format == "pdf":
+        pdf_bytes = await report_service.render_monthly_report_pdf(result)
+        filename = f"inventory_monthly_{year}_{month:02d}.pdf"
+        return StreamingResponse(
+            iter([pdf_bytes]),
+            media_type="application/pdf",
+            headers={"Content-Disposition": f"attachment; filename={filename}"},
+        )
+    if format == "xlsx":
+        xlsx_bytes = await report_service.render_monthly_report_xlsx(result)
+        filename = f"inventory_monthly_{year}_{month:02d}.xlsx"
+        return StreamingResponse(
+            iter([xlsx_bytes]),
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={"Content-Disposition": f"attachment; filename={filename}"},
+        )
+    return result

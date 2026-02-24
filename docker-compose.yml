@@ -40,6 +40,7 @@ services:
     environment:
       - NEXT_PUBLIC_API_URL=http://localhost/api/v1
       - NODE_ENV=development
+      - WATCHPACK_POLLING=true # Required for hot-reload on Windows NTFS → Docker volumes
     volumes:
       - ./frontend:/app
       - /app/node_modules
@@ -59,11 +60,16 @@ services:
       dockerfile: Dockerfile.dev
     container_name: osca_api
     <<: *common-env
+    environment:
+      - INSIGHTFACE_HOME=/app/.insightface  # Save models to the persistent volume
     volumes:
       - ./backend:/app
-      - fr_models:/app/.insightface      # Persist downloaded FR models
+      - fr_models:/app/.insightface # Persist downloaded FR models
     ports:
       - "8000:8000"
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
     networks:
       - osca_net
     depends_on:
@@ -75,7 +81,7 @@ services:
         condition: service_healthy
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      test: [ "CMD", "curl", "-f", "http://localhost:8000/health" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -131,7 +137,7 @@ services:
       - osca_net
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-osca_user} -d ${POSTGRES_DB:-osca_db}"]
+      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-osca_user} -d ${POSTGRES_DB:-osca_db}" ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -141,11 +147,7 @@ services:
     image: redis:7.2-alpine
     container_name: osca_redis
     command: >
-      redis-server
-      --requirepass ${REDIS_PASSWORD:-changeme}
-      --appendonly yes
-      --maxmemory 256mb
-      --maxmemory-policy allkeys-lru
+      redis-server --requirepass ${REDIS_PASSWORD:-changeme} --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
     volumes:
       - redis_data:/data
     ports:
@@ -154,7 +156,7 @@ services:
       - osca_net
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-changeme}", "ping"]
+      test: [ "CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-changeme}", "ping" ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -171,12 +173,12 @@ services:
       - minio_data:/data
     ports:
       - "9000:9000"
-      - "9001:9001"    # MinIO Console UI
+      - "9001:9001" # MinIO Console UI
     networks:
       - osca_net
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      test: [ "CMD", "curl", "-f", "http://localhost:9000/minio/health/live" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -186,9 +188,10 @@ volumes:
   postgres_data:
   redis_data:
   minio_data:
-  fr_models:         # InsightFace/DeepFace model cache
+  fr_models:
+    # InsightFace/DeepFace model cache
 
-# ── Networks ───────────────────────────────────────────────
+    # ── Networks ───────────────────────────────────────────────
 networks:
   osca_net:
     driver: bridge

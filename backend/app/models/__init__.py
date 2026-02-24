@@ -14,13 +14,19 @@ from app.models.inventory import (
     BorrowTransaction,
     BorrowTransactionItem,
     TransactionStatus,
+    EquipmentRequest,
+    EquipmentRequestItem,
+    RequestStatus,
 )
 from app.models.audit import AuditLog
+from app.models.announcement import Announcement
 
 __all__ = [
     "User", "UserRole",
     "Session", "AttendanceRecord", "FaceEmbedding", "ScanAttempt",
     "Equipment", "EquipmentCategory", "EquipmentCondition",
     "BorrowingID", "BorrowTransaction", "BorrowTransactionItem", "TransactionStatus",
+    "EquipmentRequest", "EquipmentRequestItem", "RequestStatus",
     "AuditLog",
+    "Announcement",
 ]

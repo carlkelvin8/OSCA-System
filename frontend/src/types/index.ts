@@ -137,14 +137,16 @@ export type EquipmentCondition = "new" | "good" | "fair" | "poor" | "for_repair"
 
 export type TransactionStatus = "active" | "returned" | "overdue" | "partial_return";
 
+export type RequestStatus = "pending" | "approved" | "rejected";
+
 export interface Equipment {
   id: string;
   name: string;
   description: string | null;
   category: EquipmentCategory;
   condition: EquipmentCondition;
-  barcode: string;
-  barcode_image_key: string | null;
+  qr_code: string;
+  qr_image_key: string | null;
   total_quantity: number;
   available_quantity: number;
   storage_location: string | null;
@@ -157,7 +159,7 @@ export interface BorrowTransactionItem {
   id: string;
   equipment_id: string;
   equipment_name: string;
-  equipment_barcode: string;
+  equipment_qr: string;
   quantity: number;
   is_returned: boolean;
   returned_at: string | null;
@@ -173,6 +175,64 @@ export interface BorrowTransaction {
   returned_at: string | null;
   overdue_notified: boolean;
   items: BorrowTransactionItem[];
+}
+
+export interface EquipmentRequestItem {
+  id: string;
+  equipment_id: string;
+  equipment_name: string;
+  equipment_qr: string;
+  quantity: number;
+}
+
+export interface EquipmentRequest {
+  id: string;
+  requester_id: string;
+  requester_name: string;
+  status: RequestStatus;
+  expected_return: string;
+  notes: string | null;
+  requested_at: string;
+  approved_by_id: string | null;
+  approved_at: string | null;
+  rejection_reason: string | null;
+  items: EquipmentRequestItem[];
+}
+
+// ── Announcements ─────────────────────────────────────────────────────────────
+
+export interface Announcement {
+  id: string;
+  title: string;
+  content: string;
+  event_date: string | null;
+  is_active: boolean;
+  created_by_id: string;
+  created_by_name: string;
+  created_at: string;
+  updated_at: string;
+}
+
+// ── Facial Recognition Config ─────────────────────────────────────────────────
+
+export interface FRConfig {
+  similarity_threshold: number;
+  liveness_threshold: number;
+  liveness_enabled: boolean;
+}
+
+export interface FRConfigUpdate {
+  similarity_threshold?: number;
+  liveness_threshold?: number;
+  liveness_enabled?: boolean;
+}
+
+export interface EnrollmentResponse {
+  success: boolean;
+  user_id: string;
+  embedding_id: string | null;
+  images_processed: number;
+  message: string;
 }
 
 // ── Pagination ────────────────────────────────────────────────────────────────
@@ -204,5 +264,18 @@ export interface DashboardSummary {
   transactions: {
     overdue: number;
   };
+  generated_at: string;
+}
+
+// ── Monthly Inventory Report ──────────────────────────────────────────────────
+
+export interface MonthlyInventoryReport {
+  period: { year: number; month: number };
+  total_active_equipment: number;
+  borrowed_this_month: number;
+  returned_this_month: number;
+  overdue_at_end_of_month: number;
+  top_5_borrowed: Array<{ name: string; borrow_count: number }>;
+  condition_breakdown: Record<string, number>;
   generated_at: string;
 }

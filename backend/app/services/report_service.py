@@ -4,6 +4,7 @@ PDF: WeasyPrint (HTML → PDF, professional layout)
 XLSX: openpyxl (formatted spreadsheet with column widths, headers)
 """
 import io
+from calendar import monthrange
 from datetime import UTC, datetime
 
 import openpyxl
@@ -12,7 +13,13 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.attendance import AttendanceRecord, Session
-from app.models.inventory import BorrowTransaction, Equipment, TransactionStatus
+from app.models.inventory import (
+    BorrowTransaction,
+    BorrowTransactionItem,
+    Equipment,
+    EquipmentCondition,
+    TransactionStatus,
+)
 from app.models.user import User
 
 
@@ -56,6 +63,93 @@ class ReportService:
     async def generate_inventory_xlsx(self) -> bytes:
         equipment = await self._fetch_all_equipment()
         return self._build_inventory_xlsx(equipment)
+
+    # ── Inventory Monthly Summary ──────────────────────────────────────────────
+
+    async def generate_inventory_monthly_report(self, year: int, month: int) -> dict:
+        """
+        Build a monthly inventory summary dict.
+        Covers borrows started OR returned in the given month.
+        """
+        from datetime import timezone
+        # Month boundaries (UTC)
+        _, last_day = monthrange(year, month)
+        period_start = datetime(year, month, 1, tzinfo=timezone.utc)
+        period_end = datetime(year, month, last_day, 23, 59, 59, tzinfo=timezone.utc)
+
+        # Total active equipment
+        total_active = (await self.db.execute(
+            select(func.count(Equipment.id)).where(Equipment.is_active == True)
+        )).scalar_one()
+
+        # Borrowed this month (transactions whose borrowed_at falls in period)
+        borrowed_this_month = (await self.db.execute(
+            select(func.count(BorrowTransaction.id)).where(
+                BorrowTransaction.borrowed_at >= period_start,
+                BorrowTransaction.borrowed_at <= period_end,
+            )
+        )).scalar_one()
+
+        # Returned this month
+        returned_this_month = (await self.db.execute(
+            select(func.count(BorrowTransaction.id)).where(
+                BorrowTransaction.returned_at >= period_start,
+                BorrowTransaction.returned_at <= period_end,
+            )
+        )).scalar_one()
+
+        # Still overdue at end of month
+        overdue_at_end = (await self.db.execute(
+            select(func.count(BorrowTransaction.id)).where(
+                BorrowTransaction.status == TransactionStatus.OVERDUE,
+            )
+        )).scalar_one()
+
+        # Top 5 most-borrowed equipment in period
+        top_eq_result = await self.db.execute(
+            select(Equipment.name, func.count(BorrowTransactionItem.id).label("borrow_count"))
+            .join(BorrowTransactionItem, BorrowTransactionItem.equipment_id == Equipment.id)
+            .join(BorrowTransaction, BorrowTransactionItem.transaction_id == BorrowTransaction.id)
+            .where(
+                BorrowTransaction.borrowed_at >= period_start,
+                BorrowTransaction.borrowed_at <= period_end,
+            )
+            .group_by(Equipment.name)
+            .order_by(func.count(BorrowTransactionItem.id).desc())
+            .limit(5)
+        )
+        top_equipment = [
+            {"name": row.name, "borrow_count": row.borrow_count}
+            for row in top_eq_result.all()
+        ]
+
+        # Condition breakdown
+        condition_result = await self.db.execute(
+            select(Equipment.condition, func.count(Equipment.id).label("count"))
+            .where(Equipment.is_active == True)
+            .group_by(Equipment.condition)
+        )
+        condition_breakdown = {
+            row.condition.value: row.count for row in condition_result.all()
+        }
+
+        return {
+            "period": {"year": year, "month": month},
+            "total_active_equipment": total_active,
+            "borrowed_this_month": borrowed_this_month,
+            "returned_this_month": returned_this_month,
+            "overdue_at_end_of_month": overdue_at_end,
+            "top_5_borrowed": top_equipment,
+            "condition_breakdown": condition_breakdown,
+            "generated_at": datetime.now(UTC).isoformat(),
+        }
+
+    async def render_monthly_report_pdf(self, report: dict) -> bytes:
+        html = self._render_monthly_html(report)
+        return self._html_to_pdf(html)
+
+    async def render_monthly_report_xlsx(self, report: dict) -> bytes:
+        return self._build_monthly_xlsx(report)
 
     # ── Dashboard Summary ──────────────────────────────────────────────────────
 
@@ -166,7 +260,7 @@ class ReportService:
                 "name": e.name,
                 "category": e.category.value,
                 "condition": e.condition.value,
-                "barcode": e.barcode,
+                "qr_code": e.qr_code,
                 "total_quantity": e.total_quantity,
                 "available_quantity": e.available_quantity,
                 "borrowed_quantity": e.total_quantity - e.available_quantity,
@@ -230,7 +324,7 @@ class ReportService:
             rows_html += f"""
             <tr style="background:{bg}">
                 <td>{e['name']}</td><td>{e['category']}</td><td>{e['condition']}</td>
-                <td>{e['barcode']}</td><td>{e['total_quantity']}</td>
+                <td>{e['qr_code']}</td><td>{e['total_quantity']}</td>
                 <td>{e['available_quantity']}</td><td>{e['borrowed_quantity']}</td>
                 <td>{e['storage_location'] or '-'}</td><td>{e['sport_or_art'] or '-'}</td>
             </tr>"""
@@ -248,11 +342,54 @@ class ReportService:
         <p>Total items: {len(equipment)} | Generated: {datetime.now(UTC).strftime('%Y-%m-%d %H:%M UTC')}</p>
         <table>
         <tr>
-            <th>Equipment Name</th><th>Category</th><th>Condition</th><th>Barcode</th>
+            <th>Equipment Name</th><th>Category</th><th>Condition</th><th>QR Code</th>
             <th>Total Qty</th><th>Available</th><th>Borrowed</th><th>Location</th><th>Sport/Art</th>
         </tr>
         {rows_html}
         </table>
+        </body></html>"""
+
+    def _render_monthly_html(self, report: dict) -> str:
+        period = report["period"]
+        import calendar
+        month_name = calendar.month_name[period["month"]]
+
+        top_rows = ""
+        for i, e in enumerate(report["top_5_borrowed"]):
+            bg = "#EBF0F7" if i % 2 == 0 else "#FFFFFF"
+            top_rows += f'<tr style="background:{bg}"><td>{e["name"]}</td><td>{e["borrow_count"]}</td></tr>'
+
+        condition_rows = ""
+        for cond, count in report["condition_breakdown"].items():
+            condition_rows += f"<tr><td>{cond.title()}</td><td>{count}</td></tr>"
+
+        return f"""
+        <!DOCTYPE html><html><head><meta charset="UTF-8">
+        <style>
+            body {{ font-family: Arial, sans-serif; font-size: 11pt; margin: 20px; }}
+            h1 {{ color: #1E3A5F; }} h2 {{ color: #1E3A5F; font-size: 12pt; margin-top: 20px; }}
+            .stat-grid {{ display: flex; gap: 16px; flex-wrap: wrap; margin: 12px 0; }}
+            .stat-box {{ background: #EBF0F7; border-radius: 8px; padding: 12px 20px; min-width: 140px; }}
+            .stat-label {{ font-size: 9pt; color: #666; }} .stat-value {{ font-size: 18pt; font-weight: bold; color: #1E3A5F; }}
+            table {{ border-collapse: collapse; margin-top: 8px; }} th {{ background: #1E3A5F; color: white; padding: 6px 14px; }}
+            td {{ padding: 5px 14px; border-bottom: 1px solid #DDD; }}
+        </style></head><body>
+        <h1>Monthly Inventory Summary — {month_name} {period["year"]}</h1>
+        <p>Generated: {report["generated_at"]}</p>
+        <div class="stat-grid">
+            <div class="stat-box"><div class="stat-label">Active Equipment</div>
+                <div class="stat-value">{report["total_active_equipment"]}</div></div>
+            <div class="stat-box"><div class="stat-label">Borrowed This Month</div>
+                <div class="stat-value">{report["borrowed_this_month"]}</div></div>
+            <div class="stat-box"><div class="stat-label">Returned This Month</div>
+                <div class="stat-value">{report["returned_this_month"]}</div></div>
+            <div class="stat-box"><div class="stat-label">Overdue</div>
+                <div class="stat-value" style="color:#E53E3E">{report["overdue_at_end_of_month"]}</div></div>
+        </div>
+        <h2>Top 5 Most Borrowed</h2>
+        <table><tr><th>Equipment</th><th>Borrow Count</th></tr>{top_rows}</table>
+        <h2>Equipment Condition Breakdown</h2>
+        <table><tr><th>Condition</th><th>Count</th></tr>{condition_rows}</table>
         </body></html>"""
 
     def _html_to_pdf(self, html: str) -> bytes:
@@ -293,13 +430,13 @@ class ReportService:
         ws = wb.active
         ws.title = "Inventory Report"
 
-        headers = ["Equipment Name", "Category", "Condition", "Barcode",
+        headers = ["Equipment Name", "Category", "Condition", "QR Code",
                    "Total Qty", "Available", "Borrowed", "Location", "Sport/Art"]
         self._write_header_row(ws, headers)
 
         for i, e in enumerate(equipment, start=2):
             values = [
-                e["name"], e["category"], e["condition"], e["barcode"],
+                e["name"], e["category"], e["condition"], e["qr_code"],
                 e["total_quantity"], e["available_quantity"], e["borrowed_quantity"],
                 e["storage_location"], e["sport_or_art"],
             ]
@@ -310,6 +447,45 @@ class ReportService:
                     cell.fill = row_fill
 
         self._auto_column_width(ws)
+        buffer = io.BytesIO()
+        wb.save(buffer)
+        return buffer.getvalue()
+
+    def _build_monthly_xlsx(self, report: dict) -> bytes:
+        wb = openpyxl.Workbook()
+
+        # Summary sheet
+        ws = wb.active
+        ws.title = "Summary"
+        period = report["period"]
+        import calendar
+        ws["A1"] = f"Monthly Inventory Summary — {calendar.month_name[period['month']]} {period['year']}"
+        ws["A1"].font = Font(bold=True, size=14, color="1E3A5F")
+
+        summary_rows = [
+            ("Active Equipment", report["total_active_equipment"]),
+            ("Borrowed This Month", report["borrowed_this_month"]),
+            ("Returned This Month", report["returned_this_month"]),
+            ("Overdue at End of Month", report["overdue_at_end_of_month"]),
+        ]
+        for row_idx, (label, value) in enumerate(summary_rows, start=3):
+            ws.cell(row=row_idx, column=1, value=label)
+            ws.cell(row=row_idx, column=2, value=value)
+
+        # Top 5 sheet
+        ws2 = wb.create_sheet("Top 5 Borrowed")
+        self._write_header_row(ws2, ["Equipment Name", "Borrow Count"])
+        for i, e in enumerate(report["top_5_borrowed"], start=2):
+            ws2.cell(row=i, column=1, value=e["name"])
+            ws2.cell(row=i, column=2, value=e["borrow_count"])
+
+        # Condition sheet
+        ws3 = wb.create_sheet("Condition Breakdown")
+        self._write_header_row(ws3, ["Condition", "Count"])
+        for i, (cond, count) in enumerate(report["condition_breakdown"].items(), start=2):
+            ws3.cell(row=i, column=1, value=cond.title())
+            ws3.cell(row=i, column=2, value=count)
+
         buffer = io.BytesIO()
         wb.save(buffer)
         return buffer.getvalue()

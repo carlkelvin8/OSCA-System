@@ -7,6 +7,7 @@ from pydantic import Field, field_validator
 from app.models.inventory import (
     EquipmentCategory,
     EquipmentCondition,
+    RequestStatus,
     TransactionStatus,
 )
 from app.schemas.common import OSCABaseModel
@@ -46,8 +47,8 @@ class EquipmentRead(OSCABaseModel):
     description: str | None
     category: EquipmentCategory
     condition: EquipmentCondition
-    barcode: str
-    barcode_image_key: str | None
+    qr_code: str
+    qr_image_key: str | None
     total_quantity: int
     available_quantity: int
     storage_location: str | None
@@ -74,15 +75,16 @@ class BorrowingIDRead(OSCABaseModel):
 # ── Borrow Transaction Schemas ─────────────────────────────────────────────────
 
 class BorrowItemRequest(OSCABaseModel):
-    """One equipment barcode scanned during borrowing."""
-    equipment_barcode: str
+    """One equipment QR code scanned during borrowing."""
+    equipment_qr: str
     quantity: int = Field(ge=1, default=1)
 
 
 class BorrowTransactionCreate(OSCABaseModel):
     """
+    Admin-only direct borrow (bypasses request flow).
     Step 1: PE Instructor scans Borrowing ID QR.
-    Step 2: Scan each equipment barcode.
+    Step 2: Scan each equipment QR code.
     Step 3: Confirm.
     """
     borrowing_id_qr: str = Field(description="QR code value from the Borrowing ID card")
@@ -103,7 +105,7 @@ class BorrowTransactionItemRead(OSCABaseModel):
     id: uuid.UUID
     equipment_id: uuid.UUID
     equipment_name: str = ""
-    equipment_barcode: str = ""
+    equipment_qr: str = ""
     quantity: int
     is_returned: bool
     returned_at: datetime | None
@@ -129,3 +131,56 @@ class ReturnRequest(OSCABaseModel):
     borrowing_id_qr: str
     items: list[BorrowItemRequest]
     notes: str | None = None
+
+
+# ── Equipment Request Schemas ──────────────────────────────────────────────────
+
+class EquipmentRequestItemCreate(OSCABaseModel):
+    """One equipment item in a new request."""
+    equipment_id: uuid.UUID
+    quantity: int = Field(ge=1, default=1)
+
+
+class EquipmentRequestCreate(OSCABaseModel):
+    """Coach / PE Instructor submits a borrowing request."""
+    items: list[EquipmentRequestItemCreate] = Field(min_length=1)
+    expected_return: datetime
+    notes: str | None = None
+
+    @field_validator("expected_return")
+    @classmethod
+    def return_must_be_future(cls, v: datetime) -> datetime:
+        from datetime import timezone
+        if v <= datetime.now(tz=timezone.utc):
+            raise ValueError("expected_return must be in the future")
+        return v
+
+
+class EquipmentRequestItemRead(OSCABaseModel):
+    id: uuid.UUID
+    equipment_id: uuid.UUID
+    equipment_name: str = ""
+    equipment_qr: str = ""
+    quantity: int
+
+
+class EquipmentRequestRead(OSCABaseModel):
+    id: uuid.UUID
+    requester_id: uuid.UUID
+    requester_name: str = ""
+    status: RequestStatus
+    expected_return: datetime
+    notes: str | None
+    requested_at: datetime
+    approved_by_id: uuid.UUID | None
+    approved_at: datetime | None
+    rejection_reason: str | None
+    items: list[EquipmentRequestItemRead]
+
+
+class ApproveRequestBody(OSCABaseModel):
+    notes: str | None = None
+
+
+class RejectRequestBody(OSCABaseModel):
+    rejection_reason: str = Field(min_length=1, max_length=500)

@@ -1,7 +1,9 @@
 """
-Inventory endpoints: equipment CRUD, borrowing IDs, borrow/return workflow.
+Inventory endpoints: equipment CRUD, borrowing IDs, borrow/return workflow,
+and equipment request/approval flow.
 """
 import uuid
+from datetime import UTC, datetime
 from typing import Annotated
 
 import structlog
@@ -9,8 +11,8 @@ from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.dependencies import AdminOnly, CurrentUser, StaffOnly, get_db
-from app.core.exceptions import ConflictError, NotFoundError
+from app.core.dependencies import AdminOnly, CurrentUser, get_db
+from app.core.exceptions import ConflictError, ForbiddenError, NotFoundError
 from app.models.audit import AuditLog
 from app.models.inventory import (
     BorrowingID,
@@ -18,18 +20,27 @@ from app.models.inventory import (
     BorrowTransactionItem,
     Equipment,
     EquipmentCategory,
+    EquipmentRequest,
+    EquipmentRequestItem,
+    RequestStatus,
     TransactionStatus,
 )
 from app.models.user import User, UserRole
 from app.schemas.common import MessageResponse, PaginatedResponse
 from app.schemas.inventory import (
+    ApproveRequestBody,
     BorrowingIDRead,
+    BorrowItemRequest,
     BorrowTransactionCreate,
-    BorrowTransactionRead,
     BorrowTransactionItemRead,
+    BorrowTransactionRead,
     EquipmentCreate,
     EquipmentRead,
+    EquipmentRequestCreate,
+    EquipmentRequestItemRead,
+    EquipmentRequestRead,
     EquipmentUpdate,
+    RejectRequestBody,
     ReturnRequest,
 )
 from app.services.barcode_service import BarcodeService
@@ -37,6 +48,11 @@ from app.services.storage_service import StorageService
 
 router = APIRouter()
 logger = structlog.get_logger(__name__)
+
+# Roles allowed to submit equipment requests
+_REQUEST_ROLES = {UserRole.COACH, UserRole.PE_INSTRUCTOR}
+# Roles allowed to approve/reject
+_APPROVAL_ROLES = {UserRole.ADMIN, UserRole.DIRECTOR}
 
 
 # ── Equipment ─────────────────────────────────────────────────────────────────
@@ -52,16 +68,16 @@ async def create_equipment(
     current_user: AdminOnly,
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> EquipmentRead:
-    barcode_value = BarcodeService.generate_code128_value()
-    barcode_img_bytes = BarcodeService.render_code128(barcode_value)
+    qr_value = BarcodeService.generate_qr_value(str(uuid.uuid4()))
+    qr_img_bytes = BarcodeService.render_qr(qr_value)
 
     storage = StorageService()
-    img_key = await storage.upload_barcode_image(barcode_value, barcode_img_bytes)
+    img_key = await storage.upload_qr_image(qr_value, qr_img_bytes)
 
     equipment = Equipment(
         **body.model_dump(),
-        barcode=barcode_value,
-        barcode_image_key=img_key,
+        qr_code=qr_value,
+        qr_image_key=img_key,
         available_quantity=body.total_quantity,
         created_by_id=current_user.id,
     )
@@ -71,7 +87,7 @@ async def create_equipment(
         action="EQUIPMENT_CREATED",
         resource_type="Equipment",
         status="success",
-        details={"barcode": barcode_value, "name": body.name},
+        details={"qr_code": qr_value, "name": body.name},
     ))
     await db.commit()
     await db.refresh(equipment)
@@ -98,7 +114,7 @@ async def list_equipment(
         query = query.where(Equipment.available_quantity > 0)
     if search:
         like = f"%{search}%"
-        query = query.where(Equipment.name.ilike(like) | Equipment.barcode.ilike(like))
+        query = query.where(Equipment.name.ilike(like) | Equipment.qr_code.ilike(like))
 
     total = (await db.execute(select(func.count()).select_from(query.subquery()))).scalar_one()
     query = query.offset((page - 1) * page_size).limit(page_size).order_by(Equipment.name)
@@ -124,16 +140,16 @@ async def get_equipment(
     return EquipmentRead.model_validate(eq)
 
 
-@router.get("/equipment/barcode/{barcode}", response_model=EquipmentRead, summary="Lookup by barcode scan")
-async def get_equipment_by_barcode(
-    barcode: str,
+@router.get("/equipment/qr/{qr_code}", response_model=EquipmentRead, summary="Lookup by QR code scan")
+async def get_equipment_by_qr(
+    qr_code: str,
     _user: CurrentUser,
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> EquipmentRead:
-    result = await db.execute(select(Equipment).where(Equipment.barcode == barcode))
+    result = await db.execute(select(Equipment).where(Equipment.qr_code == qr_code))
     eq = result.scalar_one_or_none()
     if not eq:
-        raise NotFoundError("Equipment", barcode)
+        raise NotFoundError("Equipment", qr_code)
     return EquipmentRead.model_validate(eq)
 
 
@@ -201,20 +217,229 @@ async def issue_borrowing_id(
     return result_schema
 
 
-# ── Borrow / Return Workflow ───────────────────────────────────────────────────
+# ── Equipment Request / Approval ───────────────────────────────────────────────
+
+@router.post(
+    "/requests",
+    response_model=EquipmentRequestRead,
+    status_code=status.HTTP_201_CREATED,
+    summary="Submit equipment request (Coach / PE Instructor)",
+)
+async def create_equipment_request(
+    body: EquipmentRequestCreate,
+    current_user: CurrentUser,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> EquipmentRequestRead:
+    if current_user.role not in _REQUEST_ROLES:
+        raise ForbiddenError("Only coaches and PE instructors may submit equipment requests.")
+
+    req = EquipmentRequest(
+        requester_id=current_user.id,
+        expected_return=body.expected_return,
+        notes=body.notes,
+    )
+    db.add(req)
+
+    for item_req in body.items:
+        eq = await db.get(Equipment, item_req.equipment_id)
+        if not eq or not eq.is_active:
+            raise NotFoundError("Equipment", str(item_req.equipment_id))
+        db.add(EquipmentRequestItem(
+            request=req,
+            equipment_id=item_req.equipment_id,
+            quantity=item_req.quantity,
+        ))
+
+    db.add(AuditLog(
+        user_id=current_user.id,
+        action="EQUIPMENT_REQUEST_CREATED",
+        resource_type="EquipmentRequest",
+        status="success",
+        details={"items_count": len(body.items)},
+    ))
+    await db.commit()
+    await db.refresh(req)
+    return await _build_request_read(req, db)
+
+
+@router.get(
+    "/requests",
+    response_model=PaginatedResponse[EquipmentRequestRead],
+    summary="List equipment requests",
+)
+async def list_equipment_requests(
+    current_user: CurrentUser,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    status_filter: RequestStatus | None = Query(None, alias="status"),
+) -> PaginatedResponse[EquipmentRequestRead]:
+    query = select(EquipmentRequest)
+    # Coaches / instructors see only their own
+    if current_user.role in _REQUEST_ROLES:
+        query = query.where(EquipmentRequest.requester_id == current_user.id)
+    if status_filter:
+        query = query.where(EquipmentRequest.status == status_filter)
+
+    total = (await db.execute(select(func.count()).select_from(query.subquery()))).scalar_one()
+    query = query.offset((page - 1) * page_size).limit(page_size).order_by(
+        EquipmentRequest.requested_at.desc()
+    )
+    requests = (await db.execute(query)).scalars().all()
+    items = [await _build_request_read(r, db) for r in requests]
+    return PaginatedResponse(items=items, total=total, page=page, page_size=page_size,
+                             pages=(total + page_size - 1) // page_size)
+
+
+@router.get(
+    "/requests/{request_id}",
+    response_model=EquipmentRequestRead,
+    summary="Get single equipment request",
+)
+async def get_equipment_request(
+    request_id: uuid.UUID,
+    current_user: CurrentUser,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> EquipmentRequestRead:
+    req = await db.get(EquipmentRequest, request_id)
+    if not req:
+        raise NotFoundError("EquipmentRequest", str(request_id))
+    if current_user.role in _REQUEST_ROLES and req.requester_id != current_user.id:
+        raise ForbiddenError("You may only view your own requests.")
+    return await _build_request_read(req, db)
+
+
+@router.put(
+    "/requests/{request_id}/approve",
+    response_model=EquipmentRequestRead,
+    summary="Approve equipment request (Admin / Director)",
+)
+async def approve_equipment_request(
+    request_id: uuid.UUID,
+    body: ApproveRequestBody,
+    current_user: CurrentUser,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> EquipmentRequestRead:
+    if current_user.role not in _APPROVAL_ROLES:
+        raise ForbiddenError("Only admin and director may approve requests.")
+
+    req = await db.get(EquipmentRequest, request_id)
+    if not req:
+        raise NotFoundError("EquipmentRequest", str(request_id))
+    if req.status != RequestStatus.PENDING:
+        raise ConflictError(f"Request is already {req.status.value}.")
+
+    # Validate stock for each item
+    items_result = await db.execute(
+        select(EquipmentRequestItem).where(EquipmentRequestItem.request_id == req.id)
+    )
+    req_items = items_result.scalars().all()
+    for ri in req_items:
+        eq = await db.get(Equipment, ri.equipment_id)
+        if not eq or not eq.is_active:
+            raise NotFoundError("Equipment", str(ri.equipment_id))
+        if eq.available_quantity < ri.quantity:
+            raise ConflictError(f"Insufficient stock for {eq.name}. Available: {eq.available_quantity}")
+
+    # Deduct stock and create BorrowTransaction
+    requester = await db.get(User, req.requester_id)
+    bid_result = await db.execute(
+        select(BorrowingID).where(
+            BorrowingID.instructor_id == req.requester_id,
+            BorrowingID.is_active == True,
+        )
+    )
+    bid = bid_result.scalar_one_or_none()
+    if not bid:
+        raise ConflictError("Requester does not have an active Borrowing ID card.")
+
+    transaction = BorrowTransaction(
+        borrowing_id_record_id=bid.id,
+        instructor_id=req.requester_id,
+        expected_return=req.expected_return,
+        notes=body.notes or req.notes,
+        processed_by_id=current_user.id,
+    )
+    db.add(transaction)
+
+    for ri in req_items:
+        eq = await db.get(Equipment, ri.equipment_id)
+        eq.available_quantity -= ri.quantity
+        db.add(BorrowTransactionItem(
+            transaction=transaction,
+            equipment_id=ri.equipment_id,
+            quantity=ri.quantity,
+        ))
+
+    now = datetime.now(UTC)
+    req.status = RequestStatus.APPROVED
+    req.approved_by_id = current_user.id
+    req.approved_at = now
+
+    db.add(AuditLog(
+        user_id=current_user.id,
+        action="EQUIPMENT_REQUEST_APPROVED",
+        resource_type="EquipmentRequest",
+        resource_id=str(req.id),
+        status="success",
+        details={"requester_id": str(req.requester_id)},
+    ))
+    await db.commit()
+    await db.refresh(req)
+    return await _build_request_read(req, db)
+
+
+@router.put(
+    "/requests/{request_id}/reject",
+    response_model=EquipmentRequestRead,
+    summary="Reject equipment request (Admin / Director)",
+)
+async def reject_equipment_request(
+    request_id: uuid.UUID,
+    body: RejectRequestBody,
+    current_user: CurrentUser,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> EquipmentRequestRead:
+    if current_user.role not in _APPROVAL_ROLES:
+        raise ForbiddenError("Only admin and director may reject requests.")
+
+    req = await db.get(EquipmentRequest, request_id)
+    if not req:
+        raise NotFoundError("EquipmentRequest", str(request_id))
+    if req.status != RequestStatus.PENDING:
+        raise ConflictError(f"Request is already {req.status.value}.")
+
+    req.status = RequestStatus.REJECTED
+    req.approved_by_id = current_user.id
+    req.approved_at = datetime.now(UTC)
+    req.rejection_reason = body.rejection_reason
+
+    db.add(AuditLog(
+        user_id=current_user.id,
+        action="EQUIPMENT_REQUEST_REJECTED",
+        resource_type="EquipmentRequest",
+        resource_id=str(req.id),
+        status="success",
+        details={"rejection_reason": body.rejection_reason},
+    ))
+    await db.commit()
+    await db.refresh(req)
+    return await _build_request_read(req, db)
+
+
+# ── Admin Direct Borrow (bypasses request flow) ────────────────────────────────
 
 @router.post(
     "/borrow",
     response_model=BorrowTransactionRead,
     status_code=status.HTTP_201_CREATED,
-    summary="Initiate equipment borrowing (PE Instructor)",
+    summary="Direct borrow — Admin override (bypasses request flow)",
 )
 async def borrow_equipment(
     body: BorrowTransactionCreate,
-    current_user: CurrentUser,
+    current_user: AdminOnly,
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> BorrowTransactionRead:
-    # Step 1: Validate Borrowing ID QR
     bid_result = await db.execute(
         select(BorrowingID).where(BorrowingID.qr_code == body.borrowing_id_qr, BorrowingID.is_active == True)
     )
@@ -222,7 +447,6 @@ async def borrow_equipment(
     if not bid:
         raise NotFoundError("Borrowing ID", body.borrowing_id_qr)
 
-    # Step 2: Check eligibility — no active overdue transactions
     overdue_check = await db.execute(
         select(BorrowTransaction).where(
             BorrowTransaction.instructor_id == bid.instructor_id,
@@ -232,7 +456,6 @@ async def borrow_equipment(
     if overdue_check.scalar_one_or_none():
         raise ConflictError("Instructor has an active or overdue borrow transaction. Return items first.")
 
-    # Step 3: Validate and reserve equipment
     transaction = BorrowTransaction(
         borrowing_id_record_id=bid.id,
         instructor_id=bid.instructor_id,
@@ -244,11 +467,11 @@ async def borrow_equipment(
 
     for item_req in body.items:
         eq_result = await db.execute(
-            select(Equipment).where(Equipment.barcode == item_req.equipment_barcode, Equipment.is_active == True)
+            select(Equipment).where(Equipment.qr_code == item_req.equipment_qr, Equipment.is_active == True)
         )
         eq = eq_result.scalar_one_or_none()
         if not eq:
-            raise NotFoundError("Equipment barcode", item_req.equipment_barcode)
+            raise NotFoundError("Equipment QR", item_req.equipment_qr)
         if eq.available_quantity < item_req.quantity:
             raise ConflictError(f"Insufficient quantity for {eq.name}. Available: {eq.available_quantity}")
 
@@ -299,16 +522,15 @@ async def return_equipment(
     if not transaction:
         raise NotFoundError("Active transaction for this Borrowing ID")
 
-    from datetime import UTC, datetime
     now = datetime.now(UTC)
 
     for item_req in body.items:
         eq_result = await db.execute(
-            select(Equipment).where(Equipment.barcode == item_req.equipment_barcode)
+            select(Equipment).where(Equipment.qr_code == item_req.equipment_qr)
         )
         eq = eq_result.scalar_one_or_none()
         if not eq:
-            raise NotFoundError("Equipment barcode", item_req.equipment_barcode)
+            raise NotFoundError("Equipment QR", item_req.equipment_qr)
 
         tx_item_result = await db.execute(
             select(BorrowTransactionItem).where(
@@ -319,13 +541,12 @@ async def return_equipment(
         )
         tx_item = tx_item_result.scalar_one_or_none()
         if not tx_item:
-            raise NotFoundError("Transaction item", item_req.equipment_barcode)
+            raise NotFoundError("Transaction item", item_req.equipment_qr)
 
         tx_item.is_returned = True
         tx_item.returned_at = now
         eq.available_quantity += tx_item.quantity
 
-    # Check if all items returned
     pending_result = await db.execute(
         select(func.count(BorrowTransactionItem.id)).where(
             BorrowTransactionItem.transaction_id == transaction.id,
@@ -374,8 +595,10 @@ async def list_transactions(
                              pages=(total + page_size - 1) // page_size)
 
 
+# ── Private helpers ────────────────────────────────────────────────────────────
+
 async def _build_transaction_read(transaction: BorrowTransaction, db: AsyncSession) -> BorrowTransactionRead:
-    """Helper: build a BorrowTransactionRead with nested items."""
+    """Build a BorrowTransactionRead with nested items."""
     items_result = await db.execute(
         select(BorrowTransactionItem).where(BorrowTransactionItem.transaction_id == transaction.id)
     )
@@ -387,7 +610,7 @@ async def _build_transaction_read(transaction: BorrowTransaction, db: AsyncSessi
         ir = BorrowTransactionItemRead.model_validate(item)
         if eq:
             ir.equipment_name = eq.name
-            ir.equipment_barcode = eq.barcode
+            ir.equipment_qr = eq.qr_code
         item_reads.append(ir)
 
     instructor = await db.get(User, transaction.instructor_id)
@@ -395,3 +618,26 @@ async def _build_transaction_read(transaction: BorrowTransaction, db: AsyncSessi
     tr.instructor_name = instructor.full_name if instructor else ""
     tr.items = item_reads
     return tr
+
+
+async def _build_request_read(req: EquipmentRequest, db: AsyncSession) -> EquipmentRequestRead:
+    """Build an EquipmentRequestRead with nested items."""
+    items_result = await db.execute(
+        select(EquipmentRequestItem).where(EquipmentRequestItem.request_id == req.id)
+    )
+    req_items = items_result.scalars().all()
+
+    item_reads = []
+    for ri in req_items:
+        eq = await db.get(Equipment, ri.equipment_id)
+        ir = EquipmentRequestItemRead.model_validate(ri)
+        if eq:
+            ir.equipment_name = eq.name
+            ir.equipment_qr = eq.qr_code
+        item_reads.append(ir)
+
+    requester = await db.get(User, req.requester_id)
+    rr = EquipmentRequestRead.model_validate(req)
+    rr.requester_name = requester.full_name if requester else ""
+    rr.items = item_reads
+    return rr

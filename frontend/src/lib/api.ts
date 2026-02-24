@@ -119,7 +119,7 @@ export const authApi = {
 
 export const usersApi = {
   list: (params?: Record<string, string | number | boolean>) =>
-    api.get("/users/", { params }),
+    api.get("/users", { params }),
   get: (id: string) => api.get(`/users/${id}`),
   create: (data: Record<string, unknown>) => api.post("/users/register", data),
   update: (id: string, data: Record<string, unknown>) =>
@@ -144,8 +144,8 @@ export const inventoryApi = {
   listEquipment: (params?: Record<string, string | number | boolean>) =>
     api.get("/inventory/equipment", { params }),
   getEquipment: (id: string) => api.get(`/inventory/equipment/${id}`),
-  getEquipmentByBarcode: (barcode: string) =>
-    api.get(`/inventory/equipment/barcode/${barcode}`),
+  getEquipmentByQR: (qrCode: string) =>
+    api.get(`/inventory/equipment/qr/${qrCode}`),
   createEquipment: (data: Record<string, unknown>) =>
     api.post("/inventory/equipment", data),
   updateEquipment: (id: string, data: Record<string, unknown>) =>
@@ -156,6 +156,16 @@ export const inventoryApi = {
   return: (data: Record<string, unknown>) => api.post("/inventory/return", data),
   listTransactions: (params?: Record<string, string | number | boolean>) =>
     api.get("/inventory/transactions", { params }),
+  // Equipment Request workflow
+  createRequest: (data: Record<string, unknown>) =>
+    api.post("/inventory/requests", data),
+  listRequests: (params?: Record<string, string | number | boolean>) =>
+    api.get("/inventory/requests", { params }),
+  getRequest: (id: string) => api.get(`/inventory/requests/${id}`),
+  approveRequest: (id: string, data?: Record<string, unknown>) =>
+    api.put(`/inventory/requests/${id}/approve`, data ?? {}),
+  rejectRequest: (id: string, rejection_reason: string) =>
+    api.put(`/inventory/requests/${id}/reject`, { rejection_reason }),
 };
 
 export const reportsApi = {
@@ -172,5 +182,25 @@ export const reportsApi = {
   inventoryPdf: () => api.get("/reports/inventory/pdf", { responseType: "blob" }),
   inventoryXlsx: () =>
     api.get("/reports/inventory/xlsx", { responseType: "blob" }),
+  inventoryMonthly: (year: number, month: number, format: "json" | "pdf" | "xlsx" = "json") =>
+    api.get("/reports/inventory/monthly", {
+      params: { year, month, format },
+      responseType: format === "json" ? "json" : "blob",
+    }),
   dashboardSummary: () => api.get("/reports/dashboard/summary"),
+};
+
+export const announcementsApi = {
+  list: (params?: Record<string, string | number | boolean>) =>
+    api.get("/announcements", { params }),
+  create: (data: Record<string, unknown>) =>
+    api.post("/announcements", data),
+  update: (id: string, data: Record<string, unknown>) =>
+    api.patch(`/announcements/${id}`, data),
+  remove: (id: string) => api.delete(`/announcements/${id}`),
+};
+
+export const adminApi = {
+  getFRConfig: () => api.get("/admin/fr-config"),
+  updateFRConfig: (data: Record<string, unknown>) => api.put("/admin/fr-config", data),
 };

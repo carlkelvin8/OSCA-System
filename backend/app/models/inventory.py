@@ -1,5 +1,6 @@
 """
-Inventory models: Equipment, BorrowingID, BorrowTransaction.
+Inventory models: Equipment, BorrowingID, BorrowTransaction,
+EquipmentRequest, EquipmentRequestItem.
 """
 import enum
 import uuid
@@ -32,8 +33,14 @@ class EquipmentCategory(str, enum.Enum):
     TRAINING_AIDS = "training_aids"
     ELECTRONIC = "electronic"
     CULTURAL = "cultural"           # Musical instruments, costumes, etc.
-    STORAGE_UNIT = "storage_unit"   # Non-labelable → barcode on container
+    STORAGE_UNIT = "storage_unit"   # Non-labelable → QR code on container
     OTHER = "other"
+
+
+class RequestStatus(str, enum.Enum):
+    PENDING = "pending"
+    APPROVED = "approved"
+    REJECTED = "rejected"
 
 
 class EquipmentCondition(str, enum.Enum):
@@ -55,7 +62,7 @@ class TransactionStatus(str, enum.Enum):
 class Equipment(Base):
     """
     Physical equipment managed by OSCA.
-    Each piece gets a Code-128 barcode printed via Zebra GK420d.
+    Each piece gets a QR code label printed via Zebra GK420d.
     """
     __tablename__ = "equipment"
 
@@ -71,11 +78,11 @@ class Equipment(Base):
         default=EquipmentCondition.GOOD,
     )
 
-    # Barcode (Code-128 standard)
-    barcode: Mapped[str] = mapped_column(String(50), unique=True, nullable=False, index=True)
-    barcode_image_key: Mapped[str | None] = mapped_column(
+    # QR Code identifier
+    qr_code: Mapped[str] = mapped_column(String(50), unique=True, nullable=False, index=True)
+    qr_image_key: Mapped[str | None] = mapped_column(
         String(500), nullable=True,
-        comment="MinIO object key for printed barcode label image"
+        comment="MinIO object key for printed QR code label image"
     )
 
     # Quantity tracking
@@ -109,6 +116,9 @@ class Equipment(Base):
     transaction_items: Mapped[list["BorrowTransactionItem"]] = relationship(
         "BorrowTransactionItem", back_populates="equipment"
     )
+    request_items: Mapped[list["EquipmentRequestItem"]] = relationship(
+        "EquipmentRequestItem", back_populates="equipment"
+    )
     created_by: Mapped["User"] = relationship("User", foreign_keys=[created_by_id])  # noqa: F821
 
     __table_args__ = (
@@ -118,7 +128,7 @@ class Equipment(Base):
     )
 
     def __repr__(self) -> str:
-        return f"<Equipment {self.barcode}: {self.name}>"
+        return f"<Equipment {self.qr_code}: {self.name}>"
 
 
 class BorrowingID(Base):
@@ -241,4 +251,75 @@ class BorrowTransactionItem(Base):
     __table_args__ = (
         Index("ix_transaction_items_transaction", "transaction_id"),
         Index("ix_transaction_items_equipment", "equipment_id"),
+    )
+
+
+# ── Equipment Request / Approval Workflow ──────────────────────────────────────
+
+
+class EquipmentRequest(Base):
+    """
+    A Coach or PE Instructor submits a request for equipment.
+    An Admin or Director reviews and approves or rejects it.
+    On approval a BorrowTransaction is created automatically.
+    """
+    __tablename__ = "equipment_requests"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    requester_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id"), nullable=False
+    )
+    status: Mapped[RequestStatus] = mapped_column(
+        Enum(RequestStatus, name="request_status_enum"),
+        nullable=False,
+        default=RequestStatus.PENDING,
+    )
+    expected_return: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    requested_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    # Approval fields (nullable until approved/rejected)
+    approved_by_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id"), nullable=True
+    )
+    approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    rejection_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    # Relationships
+    requester: Mapped["User"] = relationship("User", foreign_keys=[requester_id])  # noqa: F821
+    approved_by: Mapped["User | None"] = relationship(  # noqa: F821
+        "User", foreign_keys=[approved_by_id]
+    )
+    items: Mapped[list["EquipmentRequestItem"]] = relationship(
+        "EquipmentRequestItem", back_populates="request", cascade="all, delete-orphan"
+    )
+
+    __table_args__ = (
+        Index("ix_equipment_requests_requester", "requester_id"),
+        Index("ix_equipment_requests_status", "status"),
+    )
+
+
+class EquipmentRequestItem(Base):
+    """Line item within an EquipmentRequest."""
+    __tablename__ = "equipment_request_items"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    request_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("equipment_requests.id", ondelete="CASCADE"),
+        nullable=False
+    )
+    equipment_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("equipment.id"), nullable=False
+    )
+    quantity: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+
+    # Relationships
+    request: Mapped["EquipmentRequest"] = relationship("EquipmentRequest", back_populates="items")
+    equipment: Mapped["Equipment"] = relationship("Equipment", back_populates="request_items")
+
+    __table_args__ = (
+        Index("ix_equipment_request_items_request", "request_id"),
     )

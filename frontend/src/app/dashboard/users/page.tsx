@@ -136,9 +136,8 @@ function Modal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm px-4">
       <div
-        className={`bg-white rounded-2xl shadow-2xl w-full flex flex-col max-h-[90vh] ${
-          wide ? "max-w-2xl" : "max-w-lg"
-        }`}
+        className={`bg-white rounded-2xl shadow-2xl w-full flex flex-col max-h-[90vh] ${wide ? "max-w-2xl" : "max-w-lg"
+          }`}
       >
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-[#f3f4f6]">
@@ -357,7 +356,7 @@ function FaceEnrollModal({
     try {
       // Strip data URL prefix → raw base64
       const images = captures.map((c) => c.split(",")[1]);
-      await attendanceApi.enroll({ user_id: user.id, images });
+      await attendanceApi.enroll({ user_id: user.id, images_base64: images });
       qc.invalidateQueries({ queryKey: ["users"] });
       setEnrolled(true);
     } catch (err: unknown) {
@@ -514,9 +513,8 @@ function UserRow({
       </td>
       <td className="px-4 py-3">
         <span
-          className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${
-            roleColors[user.role]
-          }`}
+          className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${roleColors[user.role]
+            }`}
         >
           {roleLabel[user.role]}
         </span>
@@ -530,11 +528,10 @@ function UserRow({
       </td>
       <td className="px-4 py-3 text-center">
         <span
-          className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${
-            user.is_active
-              ? "bg-emerald-50 text-emerald-700"
-              : "bg-amber-50 text-amber-700"
-          }`}
+          className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${user.is_active
+            ? "bg-emerald-50 text-emerald-700"
+            : "bg-amber-50 text-amber-700"
+            }`}
         >
           {user.is_active ? "Active" : "Pending"}
         </span>
@@ -555,11 +552,10 @@ function UserRow({
           <button
             title={user.is_active ? "Deactivate" : "Activate"}
             onClick={() => onToggleActive(user)}
-            className={`p-1.5 rounded-lg transition-colors ${
-              user.is_active
-                ? "text-[#6b7280] hover:text-red-600 hover:bg-red-50"
-                : "text-[#6b7280] hover:text-emerald-600 hover:bg-emerald-50"
-            }`}
+            className={`p-1.5 rounded-lg transition-colors ${user.is_active
+              ? "text-[#6b7280] hover:text-red-600 hover:bg-red-50"
+              : "text-[#6b7280] hover:text-emerald-600 hover:bg-emerald-50"
+              }`}
           >
             {user.is_active ? <UserX size={15} /> : <UserCheck size={15} />}
           </button>
@@ -643,11 +639,10 @@ export default function UsersPage() {
                 setTab(t);
                 setPage(1);
               }}
-              className={`px-4 py-1.5 text-sm font-medium rounded-md transition-colors ${
-                tab === t
-                  ? "bg-white text-[#111827] shadow-sm"
-                  : "text-[#6b7280] hover:text-[#374151]"
-              }`}
+              className={`px-4 py-1.5 text-sm font-medium rounded-md transition-colors ${tab === t
+                ? "bg-white text-[#111827] shadow-sm"
+                : "text-[#6b7280] hover:text-[#374151]"
+                }`}
             >
               {t === "all" ? "All Users" : "Pending Approval"}
               {t === "all" && data && (

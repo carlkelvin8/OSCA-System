@@ -7,12 +7,13 @@ import uuid
 from datetime import UTC, datetime
 from typing import Annotated
 
+import redis.asyncio as aioredis
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.dependencies import AdminOnly, AdminOrCoach, CurrentUser, StaffOnly, get_db
+from app.core.dependencies import AdminOnly, AdminOrCoach, CurrentUser, ScanStaff, StaffOnly, get_db, get_redis
 from app.core.exceptions import NotFoundError
 from app.models.attendance import (
     AttendanceRecord,
@@ -35,6 +36,12 @@ from app.schemas.attendance import (
 )
 from app.schemas.common import MessageResponse, PaginatedResponse
 from app.services.facial_recognition import FacialRecognitionService
+from app.services.fr_config_service import FRConfigService
+
+# Number of consecutive scan failures from one kiosk IP that triggers an admin alert
+_CONSEC_FAIL_LIMIT = 3
+# TTL for the consecutive-failure counter key (seconds)
+_CONSEC_FAIL_WINDOW = 300
 
 router = APIRouter()
 logger = structlog.get_logger(__name__)
@@ -111,14 +118,21 @@ async def list_sessions(
 @router.post(
     "/enroll",
     response_model=EnrollmentResponse,
-    summary="Enroll a student's face (Admin only)",
+    summary="Enroll a face (Admin enrolls anyone; Student enrolls themselves only)",
 )
 async def enroll_face(
     body: EnrollmentRequest,
-    _admin: AdminOnly,
+    current_user: CurrentUser,
     db: Annotated[AsyncSession, Depends(get_db)],
     fr_service: Annotated[FacialRecognitionService, Depends(_get_fr_service)],
 ) -> EnrollmentResponse:
+    # Students can only enroll their own face — admins may enroll anyone
+    if current_user.role == UserRole.STUDENT and current_user.id != body.user_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Students can only enroll their own face.",
+        )
+
     # Verify user exists and has given consent
     result = await db.execute(select(User).where(User.id == body.user_id))
     user = result.scalar_one_or_none()
@@ -190,13 +204,15 @@ async def enroll_face(
 @router.post(
     "/scan",
     response_model=FaceScanResponse,
-    summary="Kiosk: time-in or time-out via facial recognition",
+    summary="Attendance Scan: time-in or time-out (Admin / Coach / PE Instructor only)",
 )
 async def face_scan(
     body: FaceScanRequest,
+    current_staff: ScanStaff,
     request: Request,
     db: Annotated[AsyncSession, Depends(get_db)],
     fr_service: Annotated[FacialRecognitionService, Depends(_get_fr_service)],
+    redis: Annotated[aioredis.Redis, Depends(get_redis)],
 ) -> FaceScanResponse:
     start_time = time.monotonic()
 
@@ -227,14 +243,23 @@ async def face_scan(
             message="No enrolled students in system",
         )
 
-    # Run facial recognition
+    # Resolve runtime FR thresholds from Redis (US-007: admin-configurable)
+    fr_config = FRConfigService(redis)
+    sim_threshold = await fr_config.get_similarity_threshold()
+    live_threshold = await fr_config.get_liveness_threshold()
+    live_enabled = await fr_config.get_liveness_enabled()
+
+    # Run facial recognition with runtime thresholds
     match_result = await fr_service.identify_face(
         image_bytes=image_bytes,
         stored_embeddings=[(emb.user_id, emb.embedding) for emb in all_embeddings],
+        similarity_threshold=sim_threshold,
+        liveness_threshold=live_threshold,
+        liveness_enabled=live_enabled,
     )
 
     processing_ms = int((time.monotonic() - start_time) * 1000)
-    kiosk_ip = request.client.host if request.client else None
+    kiosk_ip = request.client.host if request.client else "unknown"
 
     # Log scan attempt
     scan_attempt = ScanAttempt(
@@ -250,6 +275,32 @@ async def face_scan(
     db.add(scan_attempt)
 
     if match_result.result != ScanResult.SUCCESS:
+        # ── Consecutive-failure tracking (US-005 AC: alert on 3 failures) ───
+        consec_key = f"fr_consec_fails:{kiosk_ip}"
+        failure_count = await redis.incr(consec_key)
+        await redis.expire(consec_key, _CONSEC_FAIL_WINDOW)
+
+        if failure_count >= _CONSEC_FAIL_LIMIT:
+            db.add(
+                AuditLog(
+                    action="FR_CONSECUTIVE_FAILURES",
+                    resource_type="ScanAttempt",
+                    ip_address=kiosk_ip,
+                    status="warning",
+                    details={
+                        "kiosk_ip": kiosk_ip,
+                        "failure_count": int(failure_count),
+                        "last_result": match_result.result,
+                    },
+                )
+            )
+            await redis.delete(consec_key)  # reset so next N failures trigger a fresh alert
+            logger.warning(
+                "fr_consecutive_failures_alert",
+                kiosk_ip=kiosk_ip,
+                count=failure_count,
+            )
+
         await db.commit()
         return FaceScanResponse(
             result=match_result.result,
@@ -306,6 +357,9 @@ async def face_scan(
         record.time_out_liveness_score = match_result.liveness_score
         record.duration_minutes = int((now - record.time_in).total_seconds() / 60)
         record.is_complete = True
+
+    # Reset consecutive-failure counter on success
+    await redis.delete(f"fr_consec_fails:{kiosk_ip}")
 
     await db.commit()
     await db.refresh(record)

@@ -38,11 +38,20 @@ async def lifespan(app: FastAPI):
 
     # Pre-warm facial recognition model on startup
     if settings.FR_MODEL == "insightface":
-        from app.services.facial_recognition import FacialRecognitionService
-        fr_service = FacialRecognitionService()
-        await fr_service.initialize()
-        app.state.fr_service = fr_service
-        logger.info("fr_model_loaded", model=settings.FR_MODEL)
+        try:
+            from app.services.facial_recognition import FacialRecognitionService
+            fr_service = FacialRecognitionService()
+            await fr_service.initialize()
+            app.state.fr_service = fr_service
+            logger.info("fr_model_loaded", model=settings.FR_MODEL)
+        except Exception as exc:
+            logger.warning(
+                "fr_model_load_failed",
+                model=settings.FR_MODEL,
+                error=str(exc),
+                hint="FR endpoints will be unavailable until the model is downloaded.",
+            )
+            app.state.fr_service = None
 
     yield
 
@@ -65,6 +74,7 @@ app = FastAPI(
     openapi_url="/openapi.json" if not settings.is_production else None,
     default_response_class=ORJSONResponse,  # Faster JSON serialization
     lifespan=lifespan,
+    redirect_slashes=False,  # Prevent 308 redirects that browsers cache permanently
 )
 
 # ── Middleware ─────────────────────────────────────────────────────────────────
@@ -72,7 +82,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.ALLOWED_ORIGINS,
     allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type", "X-Request-ID"],
     expose_headers=["X-Request-ID"],
 )

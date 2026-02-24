@@ -113,6 +113,10 @@ StaffOnly = Annotated[User, Depends(
 NotStudent = Annotated[User, Depends(
     require_roles(UserRole.ADMIN, UserRole.COACH, UserRole.PE_INSTRUCTOR, UserRole.DIRECTOR)
 )]
+# For attendance scan — must be logged-in staff (not public, not student)
+ScanStaff = Annotated[User, Depends(
+    require_roles(UserRole.ADMIN, UserRole.COACH, UserRole.PE_INSTRUCTOR)
+)]
 
 
 # ── Rate Limiting ─────────────────────────────────────────────────────────────

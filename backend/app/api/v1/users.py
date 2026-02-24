@@ -58,7 +58,7 @@ async def create_user(
 
 
 @router.get(
-    "/",
+    "",
     response_model=PaginatedResponse[UserSummary],
     summary="List all users (Admin/Director)",
 )
