@@ -13,8 +13,8 @@ const PUBLIC_PATHS = ["/login", "/register", "/api"];
 export function middleware(request: NextRequest) {
     const { pathname } = request.nextUrl;
 
-    // Allow public routes and Next.js internals
-    if (PUBLIC_PATHS.some((path) => pathname.startsWith(path))) {
+    // Allow landing page and public routes
+    if (pathname === "/" || PUBLIC_PATHS.some((path) => pathname.startsWith(path))) {
         return NextResponse.next();
     }
 
@@ -30,5 +30,6 @@ export function middleware(request: NextRequest) {
 }
 
 export const config = {
-    matcher: ["/((?!_next/static|_next/image|favicon.ico|public).*)"],
+    // Exclude Next.js internals, static files, and any path with a file extension
+    matcher: ["/((?!_next/static|_next/image|favicon.ico|.*\\.(?:png|jpg|jpeg|gif|svg|ico|webp|woff|woff2|ttf|pdf|css|js)).*)"],
 };
