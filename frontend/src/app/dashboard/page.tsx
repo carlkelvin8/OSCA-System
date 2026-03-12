@@ -217,10 +217,12 @@ export default function DashboardPage() {
     },
   ];
 
+  // Student: only equipment available + attendance
   // PE Instructor: only equipment + overdue stats
   // Coach: attendance + equipment + overdue (sport-specific label)
   // Admin/Director: all stats
   const stats = allStats.filter((s) => {
+    if (role === "student") return s.key === "equipment" || s.key === "attendance";
     if (role === "pe_instructor") return s.key === "equipment" || s.key === "overdue";
     if (role === "coach") return s.key !== "students";
     return true; // admin, director see all

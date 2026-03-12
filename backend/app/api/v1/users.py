@@ -128,8 +128,8 @@ async def update_user(
     # Students can only update their own profile
     if current_user.role == UserRole.STUDENT and current_user.id != user_id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
-    # Only admins can change is_active
-    if body.is_active is not None and current_user.role != UserRole.ADMIN:
+    # Only admins/directors can change is_active
+    if body.is_active is not None and current_user.role not in (UserRole.ADMIN, UserRole.DIRECTOR):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only admins can change active status")
 
     result = await db.execute(select(User).where(User.id == user_id))
