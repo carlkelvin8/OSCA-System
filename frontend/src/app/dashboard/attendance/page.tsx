@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { attendanceApi } from "@/lib/api";
+import { useAuthStore } from "@/store/useAuthStore";
 import { CalendarCheck, Plus, X, Loader2 } from "lucide-react";
 import type { Session, ActivityType, PaginatedResponse } from "@/types";
 import { format } from "date-fns";
@@ -39,11 +40,15 @@ const ACTIVITY_OPTIONS: { value: ActivityType; label: string }[] = [
 
 interface NewSessionModalProps {
   onClose: () => void;
+  defaultSport?: string;
 }
 
-function NewSessionModal({ onClose }: NewSessionModalProps) {
+function NewSessionModal({ onClose, defaultSport }: NewSessionModalProps) {
   const queryClient = useQueryClient();
-  const [form, setForm] = useState<SessionFormData>(EMPTY_FORM);
+  const [form, setForm] = useState<SessionFormData>({
+    ...EMPTY_FORM,
+    ...(defaultSport ? { sport_or_art: defaultSport } : {}),
+  });
   const [error, setError] = useState<string | null>(null);
 
   const { mutate: createSession, isPending } = useMutation({
@@ -232,6 +237,9 @@ function NewSessionModal({ onClose }: NewSessionModalProps) {
 // ── Main Page ─────────────────────────────────────────────────────────────────
 
 export default function AttendancePage() {
+  const { user } = useAuthStore();
+  const isCoach = user?.role === "coach";
+  const coachSport = user?.sport_or_art ?? undefined;
   const [page, setPage] = useState(1);
   const [showNewSession, setShowNewSession] = useState(false);
 
@@ -255,13 +263,17 @@ export default function AttendancePage() {
 
   return (
     <>
-      {showNewSession && <NewSessionModal onClose={() => setShowNewSession(false)} />}
+      {showNewSession && <NewSessionModal onClose={() => setShowNewSession(false)} defaultSport={coachSport} />}
 
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Attendance</h1>
-            <p className="text-sm text-gray-500">Manage sessions and view attendance records</p>
+            <p className="text-sm text-gray-500">
+              {isCoach && coachSport
+                ? `Sessions for ${coachSport}`
+                : "Manage sessions and view attendance records"}
+            </p>
           </div>
           <button
             onClick={() => setShowNewSession(true)}

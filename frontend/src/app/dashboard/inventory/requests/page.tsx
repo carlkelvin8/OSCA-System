@@ -3,12 +3,13 @@
 /**
  * Equipment Requests page — Coach/PE Instructor submits requests;
  * Admin/Director approves or rejects them.
+ * QR code workflow: requester shows QR → approver scans to approve.
  */
-import { useState } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { inventoryApi } from "@/lib/api";
 import {
-  CheckCircle2, XCircle, Clock, Plus, X, Loader2, Package,
+  CheckCircle2, XCircle, Clock, Plus, X, Loader2, Package, QrCode, ScanLine,
 } from "lucide-react";
 import type {
   EquipmentRequest, PaginatedResponse, RequestStatus, Equipment,
@@ -23,6 +24,221 @@ const statusConfig: Record<RequestStatus, { label: string; className: string; ic
   approved: { label: "Approved", className: "bg-green-100 text-green-800",  icon: CheckCircle2 },
   rejected: { label: "Rejected", className: "bg-red-100 text-red-800",      icon: XCircle },
 };
+
+// ── QR Code Display Modal ────────────────────────────────────────────────────
+
+function QRCodeModal({ requestId, onClose }: { requestId: string; onClose: () => void }) {
+  const [qrUrl, setQrUrl] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    inventoryApi.getRequestQR(requestId).then((res) => {
+      if (cancelled) return;
+      const url = URL.createObjectURL(new Blob([res.data], { type: "image/png" }));
+      setQrUrl(url);
+      setLoading(false);
+    }).catch(() => {
+      if (!cancelled) setLoading(false);
+    });
+    return () => { cancelled = true; };
+  }, [requestId]);
+
+  useEffect(() => {
+    return () => { if (qrUrl) URL.revokeObjectURL(qrUrl); };
+  }, [qrUrl]);
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4"
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 text-center space-y-4">
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-bold text-gray-900">Request QR Code</h2>
+          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400">
+            <X size={18} />
+          </button>
+        </div>
+        <p className="text-sm text-gray-500">
+          Show this QR code to the Admin/Director to approve your request.
+        </p>
+        <div className="flex items-center justify-center py-4">
+          {loading ? (
+            <Loader2 size={40} className="animate-spin text-gray-300" />
+          ) : qrUrl ? (
+            <img src={qrUrl} alt="Request QR Code" className="w-48 h-48" />
+          ) : (
+            <p className="text-sm text-red-500">Failed to load QR code</p>
+          )}
+        </div>
+        <p className="text-xs text-gray-400">Request ID: {requestId.slice(0, 8)}…</p>
+      </div>
+    </div>
+  );
+}
+
+// ── QR Scanner Modal (Approver) ──────────────────────────────────────────────
+
+interface ScannedRequest {
+  id: string;
+  requester_name: string;
+  items: Array<{ equipment_name: string; quantity: number }>;
+  expected_return: string;
+  status: RequestStatus;
+}
+
+function QRScannerModal({ onClose, onApprove }: {
+  onClose: () => void;
+  onApprove: (requestId: string) => void;
+}) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [scannedRequest, setScannedRequest] = useState<ScannedRequest | null>(null);
+  const [scanning, setScanning] = useState(true);
+  const readerRef = useRef<import("@zxing/browser").BrowserQRCodeReader | null>(null);
+  const controlsRef = useRef<{ stop: () => void } | null>(null);
+
+  const stopScanning = useCallback(() => {
+    controlsRef.current?.stop();
+    controlsRef.current = null;
+  }, []);
+
+  useEffect(() => {
+    if (!scanning || !videoRef.current) return;
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const { BrowserQRCodeReader } = await import("@zxing/browser");
+        const reader = new BrowserQRCodeReader();
+        readerRef.current = reader;
+
+        const controls = await reader.decodeFromVideoDevice(
+          undefined,
+          videoRef.current!,
+          async (result, _err) => {
+            if (cancelled || !result) return;
+            const text = result.getText();
+            if (!text.startsWith("REQ-")) return;
+
+            stopScanning();
+            setScanning(false);
+
+            try {
+              const res = await inventoryApi.getRequestByQR(text);
+              setScannedRequest(res.data);
+            } catch {
+              setError("Request not found or invalid QR code.");
+            }
+          }
+        );
+        controlsRef.current = controls;
+      } catch {
+        if (!cancelled) setError("Unable to access camera. Please allow camera permissions.");
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      stopScanning();
+    };
+  }, [scanning, stopScanning]);
+
+  const handleApprove = () => {
+    if (!scannedRequest) return;
+    onApprove(scannedRequest.id);
+    onClose();
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4"
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+          <h2 className="text-lg font-bold text-gray-900">Scan Request QR</h2>
+          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400">
+            <X size={18} />
+          </button>
+        </div>
+
+        <div className="px-6 py-5 space-y-4">
+          {scanning && (
+            <>
+              <p className="text-sm text-gray-500 text-center">
+                Point the camera at the borrower&apos;s QR code
+              </p>
+              <div className="relative bg-black rounded-xl overflow-hidden aspect-square">
+                <video ref={videoRef} className="w-full h-full object-cover" />
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                  <div className="w-48 h-48 border-2 border-white/50 rounded-xl" />
+                </div>
+              </div>
+            </>
+          )}
+
+          {error && (
+            <div className="text-center space-y-3">
+              <p className="text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2">{error}</p>
+              <button
+                onClick={() => { setError(null); setScanning(true); }}
+                className="text-sm text-[#1E3A5F] underline"
+              >
+                Try again
+              </button>
+            </div>
+          )}
+
+          {scannedRequest && (
+            <div className="space-y-4">
+              <div className="p-4 bg-gray-50 rounded-xl space-y-2">
+                <p className="text-sm font-semibold text-gray-900">
+                  Request from {scannedRequest.requester_name}
+                </p>
+                <ul className="space-y-0.5">
+                  {scannedRequest.items.map((item, i) => (
+                    <li key={i} className="text-xs text-gray-600">
+                      {item.equipment_name} x {item.quantity}
+                    </li>
+                  ))}
+                </ul>
+                <p className="text-xs text-gray-500">
+                  Return by: {format(new Date(scannedRequest.expected_return), "MMM d, yyyy · h:mm a")}
+                </p>
+                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${statusConfig[scannedRequest.status].className}`}>
+                  {statusConfig[scannedRequest.status].label}
+                </span>
+              </div>
+
+              {scannedRequest.status === "pending" ? (
+                <div className="flex justify-end gap-3">
+                  <button
+                    onClick={onClose}
+                    className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg transition"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleApprove}
+                    className="flex items-center gap-2 px-5 py-2 text-sm bg-green-600 text-white rounded-lg hover:bg-green-700 transition font-medium"
+                  >
+                    <CheckCircle2 size={14} /> Approve Request
+                  </button>
+                </div>
+              ) : (
+                <p className="text-sm text-center text-gray-500">
+                  This request is already {scannedRequest.status}.
+                </p>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 // ── New Request Modal ──────────────────────────────────────────────────────────
 
@@ -275,6 +491,8 @@ export default function EquipmentRequestsPage() {
   const [statusFilter, setStatusFilter] = useState<RequestStatus | "">("");
   const [showNewRequest, setShowNewRequest] = useState(false);
   const [rejectingId, setRejectingId] = useState<string | null>(null);
+  const [qrViewId, setQrViewId] = useState<string | null>(null);
+  const [showScanner, setShowScanner] = useState(false);
 
   const isRequester = user?.role === "coach" || user?.role === "pe_instructor";
   const isApprover = user?.role === "admin" || user?.role === "director";
@@ -300,6 +518,16 @@ export default function EquipmentRequestsPage() {
     <>
       {showNewRequest && <NewRequestModal onClose={() => setShowNewRequest(false)} />}
       {rejectingId && <RejectModal requestId={rejectingId} onClose={() => setRejectingId(null)} />}
+      {qrViewId && <QRCodeModal requestId={qrViewId} onClose={() => setQrViewId(null)} />}
+      {showScanner && (
+        <QRScannerModal
+          onClose={() => setShowScanner(false)}
+          onApprove={(id) => {
+            approveRequest(id);
+            setShowScanner(false);
+          }}
+        />
+      )}
 
       <div className="space-y-6">
         <div className="flex items-center justify-between">
@@ -320,6 +548,14 @@ export default function EquipmentRequestsPage() {
               <option value="approved">Approved</option>
               <option value="rejected">Rejected</option>
             </select>
+            {isApprover && (
+              <button
+                onClick={() => setShowScanner(true)}
+                className="flex items-center gap-2 px-4 py-2 text-sm bg-green-600 text-white rounded-lg hover:bg-green-700 transition"
+              >
+                <ScanLine size={16} /> Scan QR
+              </button>
+            )}
             {isRequester && (
               <button
                 onClick={() => setShowNewRequest(true)}
@@ -340,19 +576,19 @@ export default function EquipmentRequestsPage() {
                 <th className="px-4 py-3 text-left font-medium">Expected Return</th>
                 <th className="px-4 py-3 text-left font-medium">Requested At</th>
                 <th className="px-4 py-3 text-center font-medium">Status</th>
-                {isApprover && <th className="px-4 py-3 text-center font-medium">Actions</th>}
+                <th className="px-4 py-3 text-center font-medium">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
               {isLoading ? (
                 <tr>
-                  <td colSpan={isApprover ? 6 : 5} className="px-4 py-8 text-center text-gray-400">
+                  <td colSpan={6} className="px-4 py-8 text-center text-gray-400">
                     <Loader2 size={20} className="animate-spin inline-block mr-2" />Loading…
                   </td>
                 </tr>
               ) : (data?.items ?? []).length === 0 ? (
                 <tr>
-                  <td colSpan={isApprover ? 6 : 5} className="px-4 py-10 text-center text-gray-400 text-sm">
+                  <td colSpan={6} className="px-4 py-10 text-center text-gray-400 text-sm">
                     No requests found.
                   </td>
                 </tr>
@@ -365,7 +601,7 @@ export default function EquipmentRequestsPage() {
                       <ul className="space-y-0.5">
                         {req.items.map((item) => (
                           <li key={item.id} className="text-xs">
-                            {item.equipment_name} × {item.quantity}
+                            {item.equipment_name} x {item.quantity}
                           </li>
                         ))}
                       </ul>
@@ -387,10 +623,20 @@ export default function EquipmentRequestsPage() {
                         </p>
                       )}
                     </td>
-                    {isApprover && (
-                      <td className="px-4 py-3 text-center">
-                        {req.status === "pending" && (
-                          <div className="flex items-center justify-center gap-2">
+                    <td className="px-4 py-3 text-center">
+                      <div className="flex items-center justify-center gap-2">
+                        {/* Requester: Show QR for pending requests */}
+                        {isRequester && req.status === "pending" && (
+                          <button
+                            onClick={() => setQrViewId(req.id)}
+                            className="flex items-center gap-1 px-3 py-1 text-xs bg-[#1E3A5F]/10 text-[#1E3A5F] rounded-lg hover:bg-[#1E3A5F]/20 transition font-medium"
+                          >
+                            <QrCode size={12} /> Show QR
+                          </button>
+                        )}
+                        {/* Approver: Approve / Reject for pending requests */}
+                        {isApprover && req.status === "pending" && (
+                          <>
                             <button
                               onClick={() => approveRequest(req.id)}
                               className="flex items-center gap-1 px-3 py-1 text-xs bg-green-600 text-white rounded-lg hover:bg-green-700 transition font-medium"
@@ -403,10 +649,10 @@ export default function EquipmentRequestsPage() {
                             >
                               <XCircle size={12} /> Reject
                             </button>
-                          </div>
+                          </>
                         )}
-                      </td>
-                    )}
+                      </div>
+                    </td>
                   </tr>
                 );
               })}

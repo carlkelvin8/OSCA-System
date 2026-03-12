@@ -3,10 +3,13 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { inventoryApi, reportsApi } from "@/lib/api";
+import { useAuthStore } from "@/store/useAuthStore";
 import { Package, Download, Plus, Search } from "lucide-react";
 import type { Equipment, PaginatedResponse } from "@/types";
 
 export default function InventoryPage() {
+  const role = useAuthStore((s) => s.user?.role);
+  const isAdmin = role === "admin" || role === "director";
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
 
@@ -16,6 +19,7 @@ export default function InventoryPage() {
       const res = await inventoryApi.listEquipment({
         page,
         page_size: 20,
+        available_only: true,
         ...(search ? { search } : {}),
       });
       return res.data;
@@ -50,23 +54,25 @@ export default function InventoryPage() {
           <h1 className="text-2xl font-bold text-gray-900">Equipment Inventory</h1>
           <p className="text-sm text-gray-500">Manage OSCA sports and cultural equipment</p>
         </div>
-        <div className="flex gap-2">
-          <button
-            onClick={() => downloadReport("pdf")}
-            className="flex items-center gap-2 px-4 py-2 text-sm bg-white border rounded-lg hover:bg-gray-50"
-          >
-            <Download size={16} /> PDF
-          </button>
-          <button
-            onClick={() => downloadReport("xlsx")}
-            className="flex items-center gap-2 px-4 py-2 text-sm bg-white border rounded-lg hover:bg-gray-50"
-          >
-            <Download size={16} /> Excel
-          </button>
-          <button className="flex items-center gap-2 px-4 py-2 text-sm bg-[#1E3A5F] text-white rounded-lg hover:bg-[#16304f]">
-            <Plus size={16} /> Add Equipment
-          </button>
-        </div>
+        {isAdmin && (
+          <div className="flex gap-2">
+            <button
+              onClick={() => downloadReport("pdf")}
+              className="flex items-center gap-2 px-4 py-2 text-sm bg-white border rounded-lg hover:bg-gray-50"
+            >
+              <Download size={16} /> PDF
+            </button>
+            <button
+              onClick={() => downloadReport("xlsx")}
+              className="flex items-center gap-2 px-4 py-2 text-sm bg-white border rounded-lg hover:bg-gray-50"
+            >
+              <Download size={16} /> Excel
+            </button>
+            <button className="flex items-center gap-2 px-4 py-2 text-sm bg-[#1E3A5F] text-white rounded-lg hover:bg-[#16304f]">
+              <Plus size={16} /> Add Equipment
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Search */}
@@ -76,7 +82,7 @@ export default function InventoryPage() {
           type="text"
           value={search}
           onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-          placeholder="Search equipment name or barcode..."
+          placeholder="Search equipment name or QR code..."
           className="w-full border rounded-lg pl-9 pr-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#1E3A5F]"
         />
       </div>
@@ -89,7 +95,7 @@ export default function InventoryPage() {
               <th className="px-4 py-3 text-left font-medium">Equipment</th>
               <th className="px-4 py-3 text-left font-medium">Category</th>
               <th className="px-4 py-3 text-left font-medium">Condition</th>
-              <th className="px-4 py-3 text-left font-medium">Barcode</th>
+              <th className="px-4 py-3 text-left font-medium">QR Code</th>
               <th className="px-4 py-3 text-center font-medium">Total</th>
               <th className="px-4 py-3 text-center font-medium">Available</th>
               <th className="px-4 py-3 text-left font-medium">Location</th>
@@ -130,7 +136,7 @@ export default function InventoryPage() {
                     </span>
                   </td>
                   <td className="px-4 py-3 font-mono text-xs text-gray-500">
-                    {eq.barcode}
+                    {eq.qr_code}
                   </td>
                   <td className="px-4 py-3 text-center">{eq.total_quantity}</td>
                   <td className="px-4 py-3 text-center">

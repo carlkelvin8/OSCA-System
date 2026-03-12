@@ -3,10 +3,16 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { reportsApi } from "@/lib/api";
+import { useAuthStore } from "@/store/useAuthStore";
 import { FileText, FileSpreadsheet, Loader2, BarChart3 } from "lucide-react";
 import type { MonthlyInventoryReport } from "@/types";
 
 export default function ReportsPage() {
+  const { user } = useAuthStore();
+  const isCoach = user?.role === "coach";
+  const isAdmin = user?.role === "admin" || user?.role === "director";
+  const sportFilter: Record<string, string> | undefined =
+    isCoach && user?.sport_or_art ? { sport_or_art: user.sport_or_art } : undefined;
   const [monthYear, setMonthYear] = useState(() => {
     const now = new Date();
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
@@ -37,7 +43,11 @@ export default function ReportsPage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-gray-900">Reports</h1>
-        <p className="text-sm text-gray-500">Generate and export OSCA reports</p>
+        <p className="text-sm text-gray-500">
+          {isCoach && user?.sport_or_art
+            ? `Reports for ${user.sport_or_art}`
+            : "Generate and export OSCA reports"}
+        </p>
       </div>
 
       {/* Existing reports */}
@@ -53,7 +63,7 @@ export default function ReportsPage() {
           <div className="flex flex-wrap gap-3">
             <button
               onClick={async () => {
-                const res = await reportsApi.attendancePdf();
+                const res = await reportsApi.attendancePdf(sportFilter);
                 downloadBlob(new Blob([res.data], { type: "application/pdf" }), "attendance_report.pdf");
               }}
               className="flex items-center gap-2 px-4 py-2 text-sm bg-[#1E3A5F] text-white rounded-lg hover:bg-[#16304f] transition"
@@ -62,7 +72,7 @@ export default function ReportsPage() {
             </button>
             <button
               onClick={async () => {
-                const res = await reportsApi.attendanceXlsx();
+                const res = await reportsApi.attendanceXlsx(sportFilter);
                 downloadBlob(
                   new Blob([res.data], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }),
                   "attendance_report.xlsx"
@@ -75,8 +85,8 @@ export default function ReportsPage() {
           </div>
         </div>
 
-        {/* Inventory */}
-        <div className="bg-white rounded-xl shadow-sm p-6 space-y-4">
+        {/* Inventory — Admin/Director only */}
+        {isAdmin && <div className="bg-white rounded-xl shadow-sm p-6 space-y-4">
           <div>
             <h2 className="text-lg font-semibold text-gray-900">Inventory Report</h2>
             <p className="text-sm text-gray-500 mt-1">
@@ -106,11 +116,11 @@ export default function ReportsPage() {
               <FileSpreadsheet size={16} /> Download Excel
             </button>
           </div>
-        </div>
+        </div>}
       </div>
 
-      {/* Monthly Inventory Summary */}
-      <div className="bg-white rounded-xl shadow-sm p-6 space-y-4">
+      {/* Monthly Inventory Summary — Admin/Director only */}
+      {isAdmin && <div className="bg-white rounded-xl shadow-sm p-6 space-y-4">
         <div className="flex items-center gap-3">
           <BarChart3 size={20} className="text-[#1E3A5F]" />
           <div>
@@ -213,7 +223,7 @@ export default function ReportsPage() {
             <p className="text-xs text-gray-400 text-right">Generated: {new Date(monthlyReport.generated_at).toLocaleString("en-PH")}</p>
           </div>
         )}
-      </div>
+      </div>}
     </div>
   );
 }

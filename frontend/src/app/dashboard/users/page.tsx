@@ -183,6 +183,7 @@ function CreateUserModal({ onClose }: { onClose: () => void }) {
         first_name: data.first_name,
         last_name: data.last_name,
         role: data.role,
+        is_active: true, // Admin-created users are active immediately
         ...(data.student_id ? { student_id: data.student_id } : {}),
         ...(data.course ? { course: data.course } : {}),
         ...(data.year_level ? { year_level: data.year_level } : {}),
@@ -610,7 +611,15 @@ export default function UsersPage() {
     },
   });
 
-  const pendingCount = tab === "all" ? data?.items.filter((u) => !u.is_active).length : undefined;
+  // Separate query for pending count (always runs regardless of tab)
+  const { data: pendingData } = useQuery<PaginatedResponse<UserSummary>>({
+    queryKey: ["users", "pending-count"],
+    queryFn: async () => {
+      const res = await usersApi.list({ page: 1, page_size: 1, is_active: false });
+      return res.data;
+    },
+  });
+  const pendingCount = pendingData?.total ?? 0;
 
   return (
     <div className="space-y-5">
@@ -648,7 +657,7 @@ export default function UsersPage() {
               {t === "all" && data && (
                 <span className="ml-1.5 text-xs text-[#9ca3af]">({data.total})</span>
               )}
-              {t === "pending" && typeof pendingCount === "number" && pendingCount > 0 && (
+              {t === "pending" && pendingCount > 0 && (
                 <span className="ml-1.5 inline-flex items-center justify-center w-4 h-4 rounded-full bg-amber-500 text-white text-[10px] font-bold">
                   {pendingCount}
                 </span>

@@ -1,186 +1,0 @@
-PRODUCT REQUIREMENTS DOCUMENT
-Version 2.0  ·  Python FastAPI Edition
-????????????????????????????????????????????????????????
-Web-Based Attendance and Inventory Management System
-with Facial Recognition and Barcode Scanning
-
-National Aviation Academy of the Philippines – Villamor Campus
-Office of Sports and Cultural Affairs (OSCA)
-
-Bondoc, Trisha Victoria D.  ·  Delfin, Darell A.  ·  Poblete, Andrea D.
-February 2026  ·  v2.0 — Python FastAPI Backend
-
-1. Product Overview
-
-Document InfoProduct Requirements Document v2.0 — Python FastAPI EditionProject NameOSCA Attendance & Inventory Management SystemStakeholderOffice of Sports and Cultural Affairs, NAAP–VillamorDev MethodologyAgile SDLC — Iterative SprintsBackend StackPython 3.12 + FastAPI + DeepFace / InsightFaceStandardISO/IEC 25010 Software Quality ModelVersion2.0 — Updated from NestJS to Python FastAPIDateFebruary 2026
-1.1 Problem Statement
-OSCA at NAAP–Villamor currently manages attendance for student athletes and artists using paper log sheets, and equipment inventory using handwritten forms. This causes proxy attendance fraud, inaccurate records, delayed reporting, and no real-time equipment visibility.
-
-1.2 Proposed Solution
-A centralized, web-based platform with:
-• Biometric facial recognition (time-in / time-out dual-scan) via DeepFace or InsightFace
-• Barcode-based equipment borrowing & return with automated eligibility validation
-• Role-based access control (Admin, Coach, PE Instructor, Student)
-• Real-time dashboards, PDF/XLSX reporting, and audit logs
-
-
-
-2. Tech Stack Decision: Python FastAPI vs NestJS
-
-Why This Comparison Matters
-• Version 1.0 of this PRD recommended NestJS (Node.js / TypeScript) as the backend.
-• Version 2.0 switches to Python FastAPI. This section explains the trade-offs transparently so the team can make an informed decision.
-• Both are production-grade. The right choice depends on your team's strengths and the facial recognition requirement.
-2.1 Head-to-Head Comparison
-Factor? Python FastAPI (Chosen)?? NestJS — What You LoseFacial Recognition LibrariesDeepFace, InsightFace, face_recognition (dlib), OpenCV — mature, highly accurate, well-documentedface-api.js (TensorFlow.js) — less mature, harder to fine-tune, fewer pre-trained modelsAI / ML EcosystemPython is the global standard for ML/AI. NumPy, Pandas, scikit-learn all available nativelyNode.js ML ecosystem is limited; TensorFlow.js lacks parity with Python TFFacial Recognition AccuracyInsightFace achieves ~99.8% on LFW benchmark; DeepFace offers multiple model backendsface-api.js FaceNet gets ~95–97%; harder to swap models without major refactorOpenCV Integrationopencv-python is native; preprocessing (lighting normalization, alignment) is trivialOpenCV in Node.js requires native bindings (opencv4nodejs) — complex to set upLearning Curve for TeamPython syntax is simpler; better for students who learned Python in college coursesTypeScript/NestJS has steeper learning curve with decorators, DI containers, modulesCode SimplicityFastAPI routes are concise; Pydantic models are clean and readableNestJS is more verbose with boilerplate (modules, controllers, services, DTOs)Community & DocumentationMassive Python community; extensive StackOverflow and GitHub resources for every libraryNestJS community is growing but smaller; face-api.js is less actively maintainedAsync PerformanceFastAPI is fully async (ASGI); handles concurrent requests well with UvicornNestJS/Node.js is also async but with better raw I/O throughput (event loop advantage)Concurrency / ThroughputPython GIL limits true parallelism; use Gunicorn multi-workers as mitigationNode.js single-threaded event loop handles more concurrent connections nativelyReal-time WebSocketsSupported via FastAPI WebSockets; slightly more setup neededNestJS WebSocket Gateways are built-in and very well integratedFull-Stack Type SharingCannot share types with Next.js frontend natively (different language)TypeScript types shared end-to-end between Next.js and NestJS — zero duplicationStartup / Cold StartSlightly slower startup due to Python interpreter and ML model loadingNear-instant cold starts — better for serverless or rapid restartsDeployment SizeHeavier Docker images (~800MB–1.5GB with ML libraries + OpenCV)Lighter images (~300–500MB with Node.js)Long-term MaintainabilityEasier for future students to pick up if they know PythonRequires TypeScript knowledge; harder to hand off to non-JS developers
-2.2 Summary Verdict
-Recommendation: Python FastAPI ? — For This Thesis
-• FACIAL RECOGNITION IS THE CORE FEATURE. Python's DeepFace/InsightFace is significantly more accurate and easier to implement than face-api.js. This alone justifies the switch.
-• TEAM SKILLS. Computer Science and Information Systems students in the Philippines predominantly learn Python first. FastAPI is faster to implement correctly.
-• SCALE. OSCA is a small office with <200 concurrent users maximum. Python's GIL limitation is irrelevant at this scale.
-• TRADEOFF ACCEPTED. You sacrifice TypeScript end-to-end type safety and marginally lower raw throughput — neither matters for a capstone-scale institutional system.
-• NestJS WOULD BE BETTER if: (a) the team has strong TypeScript skills, (b) the facial recognition requirement did not exist, or (c) the system needed to scale to thousands of concurrent users.
-
-
-3. Docker — Why It Is Essential for This Project
-
-3.1 What Docker Does
-Docker packages your application and ALL its dependencies (Python version, libraries, OS-level packages like OpenCV, PostgreSQL, Redis) into lightweight, portable containers. Every container behaves identically regardless of the host machine.
-
-3.2 Docker Advantages Explained
-#AdvantageWhat It Means for Your Project1Eliminates 'Works on My Machine'Your InsightFace model loads the same on your laptop, your classmate's PC, and the NAAP school server — no version conflicts2One-Command Deploymentdocker compose up starts everything: FastAPI, PostgreSQL, Redis, MinIO, Nginx — the entire system in seconds3Isolated ServicesPostgreSQL runs in its own container; if it crashes, your FastAPI app keeps running and vice versa4Environment ParityDevelopment, testing, and production use identical environments — no 'it broke in production but not locally'5Easy RollbackIf an update breaks something, roll back to the previous Docker image with one command — no manual reinstall6Reproducible BuildsNew developer joins the team? They run docker compose up and have a full working environment in minutes, not days7OpenCV & dlib Complexity SolvedInstalling OpenCV and dlib (for facial recognition) manually on Windows/Mac is notoriously painful. Docker's Linux container handles all native dependencies cleanly8Resource IsolationEach container gets defined CPU and RAM limits — prevents one service from starving others9PortabilityDeploy on school server today; move to AWS/DigitalOcean tomorrow — same Docker Compose file works10Professional StandardDocker is the industry standard for 2026 deployments. Including it in your capstone demonstrates professional-grade engineering practice
-3.3 Your Docker Compose Architecture
-# docker-compose.yml — OSCA System
-services:
-  nginx:         # Reverse proxy + SSL termination  ? Port 80/443
-  frontend:      # Next.js 15 app                   ? Port 3000
-  api:           # FastAPI (Python 3.12)             ? Port 8000
-  postgres:      # PostgreSQL 16 database           ? Port 5432
-  redis:         # Cache + sessions                 ? Port 6379
-  minio:         # File storage (facial images)     ? Port 9000
-  celery_worker: # Background tasks (alerts, PDF)   ? Internal
-
-# Start everything:  docker compose up -d
-# Stop everything:   docker compose down
-# View logs:         docker compose logs -f api
-
-
-4. Full Tech Stack (Python Edition — 2026 Best Practices)
-
-4.1 Frontend (Unchanged from v1.0)
-LayerTechnologyVersionRationaleUI FrameworkNext.js (React)15.x App RouterSSR, file-based routing, API routes; separates cleanly from Python backend via RESTLanguageTypeScript5.xType safety on the frontend even though backend is PythonStylingTailwind CSS4.xUtility-first, rapid UI, excellent responsive supportUI Componentsshadcn/uiLatestAccessible, Radix-based component libraryStateZustand5.xLightweight global state managementFormsReact Hook Form + ZodLatestPerformant forms with schema validationWebcamreact-webcamLatestBrowser MediaDevices API for facial captureBarcode Web@zxing/browserLatestReads Code-128, QR Code from webcam in browserData FetchingTanStack Query (React Query)5.xCaching, background refetch, optimistic updatesChartsRecharts2.xReact-native charting for dashboards
-
-
-
-4.2 Backend — Python FastAPI (Core Change)
-LayerTechnologyVersionRationaleLanguagePython3.12Latest stable LTS release; significant performance improvements over 3.10FrameworkFastAPI0.115.xAsync ASGI framework; auto-generates OpenAPI/Swagger docs; Pydantic v2 built-inASGI ServerUvicorn + GunicornLatestUvicorn for async; Gunicorn multi-workers to bypass Python GILData ValidationPydantic v22.xUltra-fast Rust-based validation; defines all request/response schemasAuthenticationpython-jose + passlibLatestJWT generation/verification + Argon2/bcrypt password hashingRBAC MiddlewareCustom FastAPI Dependencies—Role-based access via FastAPI dependency injection patternBackground TasksCelery + Redis broker5.xAsync task queue for PDF generation, email alerts, face processingPDF GenerationWeasyPrint or ReportLabLatestHigh-quality PDF reports from HTML templates or programmatic generationExcel Exportopenpyxl3.xFeature-rich XLSX generation with formatting and stylingEmailFastAPI-Mail + ResendLatestAsync email for overdue notifications and account alertsHTTP ResponsesStarlette (built into FastAPI)—StreamingResponse for large file downloads (reports, exports)Barcode Generationpython-barcode + qrcodeLatestServer-side Code-128 and QR Code generation for printingTestingpytest + pytest-asyncio + httpxLatestAsync API testing; coverage reports
-4.3 Facial Recognition Engine (Python Advantage)
-ComponentTechnologyDetailsPrimary LibraryInsightFace (ArcFace model)State-of-the-art; 99.8% accuracy on LFW benchmark; best choice for productionAlternative LibraryDeepFaceWraps VGG-Face, FaceNet, ArcFace, Dlib — easy to swap models; great for researchLightweight Optionface_recognition (dlib)Simplest API; good for thesis prototyping; 99.38% on LFWImage ProcessingOpenCV (opencv-python)Face alignment, lighting normalization, image preprocessing pipelineFace DetectionMTCNN or RetinaFaceMulti-task CNN for accurate face bounding box detection before recognitionEmbeddings StoragePostgreSQL pgvector extensionStore 512-dim face vectors; perform similarity search with indexMatching LogicCosine similarity ? 0.85 thresholdConfigurable; stored embeddings compared per-scanLiveness / Anti-SpoofSilent-Face-Anti-Spoofing (MiniFASNet)Detects printed photos and screen-displayed faces; prevents spoofing attacksGPU AccelerationCUDA + cuDNN (if GPU available)InsightFace with CUDA is 10x faster than CPU inferenceAPI PatternFastAPI BackgroundTask for enrollmentFace registration runs async — doesn't block the HTTP response
-4.4 Database & Storage
-LayerTechnologyVersionRationalePrimary DBPostgreSQL16.xACID-compliant; perfect for transactional attendance & inventory dataVector Extensionpgvector0.7.xStores and indexes face embeddings directly in PostgreSQL — no separate vector DB neededORMSQLAlchemy2.xThe definitive Python ORM; async support with asyncpg driverMigrationsAlembicLatestDatabase schema versioning; pairs perfectly with SQLAlchemyDB DriverasyncpgLatestFastest async PostgreSQL driver for PythonCacheRedis7.xSession tokens, face scan cooldowns, real-time equipment statusPython Redisredis-py (async)5.xAsync Redis client for FastAPIFile StorageMinIO (self-hosted S3)LatestOn-premise storage for facial enrollment images and generated reportsPython S3 Clientboto3LatestAWS SDK for Python; works with MinIO S3-compatible API
-4.5 DevOps & Infrastructure
-LayerTechnologyRationaleContainerizationDocker + Docker ComposeAll 7 services containerized; one-command startBase Imagepython:3.12-slim-bullseyeMinimal Debian base; add only what's needed for smaller image sizeReverse ProxyNginxSSL termination, static asset serving, upstream proxy to UvicornSSLLet's Encrypt (Certbot)Free, auto-renewing HTTPS certificatesCI/CDGitHub ActionsAuto-run pytest on push; auto-deploy on merge to mainVersion ControlGit + GitHubSource control, pull request workflowMonitoringUptime Kuma + Sentry (Python SDK)Uptime checks + real-time error tracking with Python stack tracesLoggingPython logging + structlogStructured JSON logs; searchable in productionBackuppg_dump via cron in DockerNightly automated backups pushed to MinIOSecrets.env + Docker secretsNever hardcode credentials; use environment variables
-4.6 System Architecture
-???????????????????????????????????????????????????????
-?         Student / Instructor Browser                ?
-???????????????????????????????????????????????????????
-                       ? HTTPS
-           ?????????????????????????
-           ?   Nginx Reverse Proxy  ?  (Port 80/443)
-           ??????????????????????????
-                  ?          ?
-       ???????????????  ?????????????????????
-       ?  Next.js 15  ?  ? FastAPI (Python)   ?
-       ?  Frontend    ?  ? + InsightFace FR   ?
-       ?  :3000       ?  ? + OpenCV  :8000   ?
-       ???????????????  ?????????????????????
-                               ?
-         ???????????????????????????????????????????
-         ?                     ?                   ?
-  ???????????????   ???????????????  ???????????????
-  ? PostgreSQL  ?   ?    Redis    ?  ?    MinIO    ?
-  ? + pgvector  ?   ?   Cache     ?  ?   Storage   ?
-  ? :5432       ?   ?   :6379     ?  ?   :9000     ?
-  ???????????????   ???????????????  ???????????????
-                     Celery Worker (Background Jobs)
-
-
-5. Functional Requirements
-
-5.1 User Roles & Access Control
-RoleDescriptionKey PermissionsSystem AdminOSCA office staffFull CRUD all modules; creates instructor accounts; all reportsCoach (Instructor)Sport-team coachesAttendance management for assigned sport onlyPE InstructorPE professors with Borrowing IDsInitiate borrow/return transactions; view inventory statusStudent Athlete/ArtistActive OSCA participantsSelf-register; enroll face; time-in/time-out scanningOSCA DirectorRead-only stakeholderView dashboards and consolidated reports only
-5.2 Attendance Module
-Student Registration & Facial Enrollment
-• Profile: name, student ID, course, year level, medical info, emergency contacts
-• Facial enrollment: capture 5+ images at varied angles via react-webcam in browser
-• Backend processes images with InsightFace/DeepFace ? generates 512-dim embedding
-• Embeddings stored in PostgreSQL with pgvector; raw images stored in MinIO
-
-Attendance Scanning (Kiosk)
-• Time-IN: student stands at kiosk webcam ? FastAPI compares live frame embedding to stored vector
-• Time-OUT: second scan required upon session completion
-• Liveness check (MiniFASNet) runs before recognition to prevent photo spoofing
-• Minimum cosine similarity threshold: 0.85 — configurable by Admin
-• Response must complete within 3 seconds; fallback alert to Admin after 3 failed attempts
-• Attendance record saved: student_id, session_id, time_in, time_out, confidence_score, activity_type
-
-
-5.3 Inventory Module
-Equipment & Borrowing ID Management
-• Admin registers equipment: name, category, description, condition, quantity
-• System generates Code-128 barcodes for equipment; QR Codes for Borrowing IDs
-• For non-labelable items: barcode assigned to container/storage unit
-• PE Instructors issued physical Borrowing ID card with QR Code — printed via Zebra GK420d
-
-Borrow / Return Workflow
-• Step 1: PE Instructor scans Borrowing ID barcode at scanner station
-• Step 2: FastAPI validates eligibility (active account, no overdue items, within limits)
-• Step 3: Scan each equipment barcode to add to transaction
-• Step 4: Confirm — system logs instructor_id, items[], borrowed_at, expected_return
-• Return: Re-scan Borrowing ID ? scan returned items ? system marks Available
-• Overdue alerts: Celery scheduled task emails instructor + Admin after due date passes
-
-6. Non-Functional Requirements (ISO/IEC 25010)
-
-Quality AttributeRequirementTarget MetricFunctional SuitabilityAll modules perform as specified100% critical test cases pass UATPerformance EfficiencyFace recognition response time< 3 seconds per scan (CPU); < 1s with GPUUsabilityInterface usable without prior trainingSUS score ? 70 (Good)ReliabilitySystem uptime during OSCA hours? 99% Mon–Sat 6AM–9PMSecurityBiometric data encryption, RBAC, audit logsZero unauthorized access incidentsMaintainabilityClean Python codebase, documented APIsFastAPI Swagger docs always currentCompatibilityCross-browser supportChrome, Edge, Firefox (latest 2 versions)PortabilityDocker containerizedFull deployment in < 30 minutes on any Linux server
-
-7. Hardware Recommendations
-
-7.1 Facial Recognition Kiosk
-ComponentRecommendedSpecs & NotesKiosk PCMini PC: Beelink SER6 Pro / Intel NUC 13 ProAMD Ryzen 7 / Intel Core i7, 16GB RAM, 512GB NVMe — runs Chrome kiosk + local webcam feedWebcam (Best)Logitech BRIO 4K Ultra HD4K, 90° FOV, built-in IR filter, excellent low-light — critical for recognition accuracyWebcam (Budget)Logitech C920 HD Pro1080p, autofocus — good for well-lit indoor venuesIR Illuminator850nm IR LED ring lightImproves accuracy in dim sports venues; pairs with BRIO's IR capabilityDisplay10–15 inch Commercial TouchscreenShows live camera feed and recognition feedback to studentNetworkWired Cat6 Ethernet (preferred)Stable for real-time API calls; Wi-Fi 6 as backupUPSAPC Back-UPS 650VAProtects against power loss during active attendance sessions
-7.2 Barcode Scanner Station
-ComponentRecommendedSpecs & NotesPrimary ScannerHoneywell Xenon 1950g (USB)1D/2D; reads Code-128 and QR instantly; plug-and-play with browser inputBudget ScannerInateck BCST-70 / Datalogic QW2120Reliable USB 1D/2D scanners; no driver install neededWireless OptionZebra DS2278 BluetoothCordless; good for larger storage rooms; pairs to kiosk PCBarcode PrinterZebra GK420d (Thermal)Prints equipment labels and Borrowing ID cards; long-lasting thermal printLabel MaterialIndustrial Polyester / Destructible VinylWater-resistant for sports equipment; tamper-evident for Borrowing ID cardsStandard UsedCode-128 (equipment) + QR Code (IDs)Code-128 for USB scanners; QR for mobile fallback compatibility
-7.3 Server
-ComponentSpecificationNotesServerDell PowerEdge T40 or HPE ML30 Gen10Tower server suitable for school IT room — affordable, reliableCPUIntel Xeon E-2300 / Core i7-12700More cores = faster multi-worker Gunicorn + parallel InsightFace inferenceRAM32GB DDR4 ECCPostgreSQL + Redis + FastAPI + InsightFace models + Celery workersStorage1TB NVMe SSD (OS+App) + 2TB HDD (Backups+Images)SSD for speed; HDD for facial image archive and report storageGPU (Optional but Recommended)NVIDIA GeForce RTX 3060 / Quadro T400CUDA acceleration makes InsightFace face recognition ~10x faster — highly recommendedOSUbuntu Server 24.04 LTSBest Docker support; stable 5-year LTS; excellent Python/CUDA compatibilityNetworkGigabit Ethernet NICFast local network for kiosk-to-server communication
-8. Security Requirements
-
-8.1 Biometric Data Protection
-• Face embeddings encrypted at rest using AES-256-GCM via SQLAlchemy column encryption
-• Raw facial images stored in MinIO with private bucket policies (no public access)
-• Comply with Philippine Data Privacy Act of 2012 (R.A. 10173) — biometric data classified as sensitive personal information
-• Data Retention Policy: raw images deleted after successful embedding generation (configurable 30-day window)
-• Audit log entry created for every face scan attempt (success or failure)
-
-8.2 Application Security
-• HTTPS enforced; HTTP ? HTTPS redirect in Nginx
-• JWT access tokens (15-min expiry) + refresh tokens with rotation (7-day)
-• Argon2id password hashing via passlib
-• FastAPI rate limiting: 5 login attempts per 15 min, then 30-min lockout
-• SQL injection impossible — SQLAlchemy ORM uses parameterized queries exclusively
-• Input validation on all endpoints via Pydantic v2 models
-• CORS policy: only allows requests from the Next.js frontend domain
-
-
-
-9. Development Milestones
-
-SprintDeliverableDurationSprint 1Docker Compose setup, DB schema (SQLAlchemy + Alembic), FastAPI project structure, Auth module2 weeksSprint 2Next.js 15 frontend scaffold, login/register UI, role-based routing, API integration2 weeksSprint 3Facial enrollment (react-webcam ? FastAPI ? InsightFace embedding ? pgvector storage)3 weeksSprint 4Attendance kiosk UI — time-in/time-out facial recognition with liveness check2 weeksSprint 5Equipment registry, python-barcode generation, Zebra print integration2 weeksSprint 6Borrowing ID system, borrow/return workflow, eligibility validation2 weeksSprint 7Dashboards (Recharts), PDF reports (WeasyPrint), XLSX export (openpyxl)2 weeksSprint 8Celery overdue alerts, audit logs, RBAC fine-tuning, notification emails1 weekSprint 9Comprehensive testing (pytest), UAT with OSCA staff, ISO 25010 evaluation2 weeksSprint 10Bug fixes, production deployment, user orientation & training1 week
-
-
-10. Risks & Mitigations
-
-RiskImpactMitigationInsightFace slow on CPU-only serverHighUse Gunicorn multi-workers; prioritize GPU server; cache embeddings in RedisOpenCV/dlib build failures in DockerMediumUse official InsightFace Docker base image; pin all dependency versionsLow recognition accuracy in poor lightingHighInstall IR LED at kiosk; use RetinaFace detector; normalize images with OpenCVpgvector query slow with many studentsLowAdd IVFFlat index on embedding column; OSCA scale (<500 students) makes this negligibleNetwork downtime during attendanceHighImplement local offline mode (PWA + IndexedDB); sync when connection restoredBiometric data privacy complaintHighStrict R.A. 10173 compliance; clear student consent form at registration; DPO contactScope creep during sprintsMediumSprint reviews with OSCA Director approval before proceeding to next sprint
-11. Quick Reference — Key Python Libraries
-
-LibraryPurposeInstall CommandFastAPIWeb frameworkpip install fastapi[standard]UvicornASGI serverpip install uvicorn[standard]SQLAlchemy 2ORMpip install sqlalchemy asyncpgAlembicDB migrationspip install alembicPydantic v2Data validationpip install pydanticInsightFaceFacial recognition (ArcFace)pip install insightface onnxruntime-gpuDeepFaceAlt. FR librarypip install deepfaceopencv-pythonImage preprocessingpip install opencv-python-headlessface_recognitionLightweight FR (dlib)pip install face_recognitionpgvectorPostgreSQL vector supportpip install pgvectorredis-pyRedis async clientpip install redis[asyncio]celeryBackground taskspip install celery[redis]python-joseJWT tokenspip install python-jose[cryptography]passlibPassword hashing (Argon2)pip install passlib[argon2]python-barcodeBarcode generationpip install python-barcodeqrcodeQR Code generationpip install qrcode[pil]openpyxlExcel exportpip install openpyxlWeasyPrintPDF generation from HTMLpip install weasyprintboto3MinIO / S3 file storagepip install boto3pytest-asyncioAsync API testingpip install pytest pytest-asyncio httpx
-End of Product Requirements Document — v2.0 (Python FastAPI Edition)  |  NAAP–Villamor OSCA  |  February 2026

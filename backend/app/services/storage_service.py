@@ -35,16 +35,21 @@ class StorageService:
             self._client.head_bucket(Bucket=bucket)
         except ClientError:
             self._client.create_bucket(Bucket=bucket)
-            # Block all public access (biometric data — R.A. 10173)
-            self._client.put_public_access_block(
-                Bucket=bucket,
-                PublicAccessBlockConfiguration={
-                    "BlockPublicAcls": True,
-                    "IgnorePublicAcls": True,
-                    "BlockPublicPolicy": True,
-                    "RestrictPublicBuckets": True,
-                },
-            )
+            # Block all public access (biometric data — R.A. 10173).
+            # PutPublicAccessBlock is AWS S3-specific; MinIO ignores/rejects it
+            # but MinIO buckets are private by default, so this is safe to skip.
+            try:
+                self._client.put_public_access_block(
+                    Bucket=bucket,
+                    PublicAccessBlockConfiguration={
+                        "BlockPublicAcls": True,
+                        "IgnorePublicAcls": True,
+                        "BlockPublicPolicy": True,
+                        "RestrictPublicBuckets": True,
+                    },
+                )
+            except ClientError:
+                pass  # MinIO does not support this API; bucket is private by default
             logger.info("bucket_created", bucket=bucket)
 
     async def upload_bytes(

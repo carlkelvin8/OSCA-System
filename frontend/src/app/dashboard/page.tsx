@@ -178,8 +178,11 @@ export default function DashboardPage() {
     );
   }
 
-  const stats = [
+  const role = user?.role;
+
+  const allStats = [
     {
+      key: "students",
       label: "Total Students",
       value: summary?.students.total ?? 0,
       sub: `${summary?.students.face_enrolled ?? 0} face-enrolled (${summary?.students.enrollment_rate ?? 0}%)`,
@@ -187,13 +190,17 @@ export default function DashboardPage() {
       color: "bg-blue-500",
     },
     {
+      key: "attendance",
       label: "Attendance Today",
       value: summary?.attendance.today ?? 0,
-      sub: "Scans recorded today",
+      sub: role === "coach" && user?.sport_or_art
+        ? `Scans recorded today · ${user.sport_or_art}`
+        : "Scans recorded today",
       icon: CheckCircle,
       color: "bg-green-500",
     },
     {
+      key: "equipment",
       label: "Equipment Available",
       value: summary?.equipment.available ?? 0,
       sub: `${summary?.equipment.borrowed ?? 0} currently borrowed`,
@@ -201,6 +208,7 @@ export default function DashboardPage() {
       color: "bg-indigo-500",
     },
     {
+      key: "overdue",
       label: "Overdue Returns",
       value: summary?.transactions.overdue ?? 0,
       sub: "Transactions past due",
@@ -208,6 +216,15 @@ export default function DashboardPage() {
       color: summary?.transactions.overdue ? "bg-red-500" : "bg-gray-400",
     },
   ];
+
+  // PE Instructor: only equipment + overdue stats
+  // Coach: attendance + equipment + overdue (sport-specific label)
+  // Admin/Director: all stats
+  const stats = allStats.filter((s) => {
+    if (role === "pe_instructor") return s.key === "equipment" || s.key === "overdue";
+    if (role === "coach") return s.key !== "students";
+    return true; // admin, director see all
+  });
 
   const equipmentChartData = summary
     ? [

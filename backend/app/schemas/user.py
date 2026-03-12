@@ -25,6 +25,7 @@ class UserCreate(OSCABaseModel):
     emergency_contact_number: str | None = Field(default=None, max_length=20)
     assigned_sport: str | None = Field(default=None, max_length=100)
     biometric_consent: bool = False
+    is_active: bool = False  # Self-registered users are pending by default
 
 
 class UserUpdate(OSCABaseModel):
@@ -49,6 +50,7 @@ class UserSummary(OSCABaseModel):
     email: str
     role: UserRole
     student_id: str | None
+    is_active: bool
     is_face_enrolled: bool
 
 

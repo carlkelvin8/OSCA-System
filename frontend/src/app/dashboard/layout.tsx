@@ -21,6 +21,8 @@ import {
   ChevronRight,
   Bell,
   ClipboardList,
+  ScanFace,
+  UserCircle,
 } from "lucide-react";
 import { useAuthStore } from "@/store/useAuthStore";
 import type { UserRole } from "@/types";
@@ -37,19 +39,19 @@ const navItems: {
       href: "/dashboard",
       label: "Dashboard",
       icon: LayoutDashboard,
-      roles: ["admin", "coach", "pe_instructor", "director", "student"],
+      roles: ["admin", "director", "coach", "pe_instructor", "student"],
     },
     {
       href: "/dashboard/attendance",
       label: "Attendance",
       icon: CalendarCheck,
-      roles: ["admin", "coach", "student"],
+      roles: ["admin", "director", "coach", "student"],
     },
     {
       href: "/dashboard/inventory",
       label: "Inventory",
       icon: Package,
-      roles: ["admin", "pe_instructor", "coach"],
+      roles: ["admin", "director", "pe_instructor", "coach"],
     },
     {
       href: "/dashboard/inventory/requests",
@@ -61,19 +63,31 @@ const navItems: {
       href: "/dashboard/users",
       label: "Users",
       icon: Users,
-      roles: ["admin"],
+      roles: ["admin", "director"],
+    },
+    {
+      href: "/dashboard/admin/fr-config",
+      label: "FR Config",
+      icon: ScanFace,
+      roles: ["admin", "director"],
     },
     {
       href: "/dashboard/reports",
       label: "Reports",
       icon: BarChart3,
-      roles: ["admin", "coach", "director"],
+      roles: ["admin", "director", "coach"],
     },
     {
       href: "/kiosk",
       label: "Attendance Scan",
       icon: Camera,
-      roles: ["admin", "coach", "pe_instructor"],
+      roles: ["admin", "coach"],
+    },
+    {
+      href: "/dashboard/profile",
+      label: "Profile",
+      icon: UserCircle,
+      roles: ["admin", "director", "coach", "pe_instructor", "student"],
     },
   ];
 

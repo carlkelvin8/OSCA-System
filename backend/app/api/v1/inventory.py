@@ -8,6 +8,7 @@ from typing import Annotated
 
 import structlog
 from fastapi import APIRouter, Depends, Query, status
+from fastapi.responses import Response
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -292,6 +293,28 @@ async def list_equipment_requests(
 
 
 @router.get(
+    "/requests/qr/{qr_value}",
+    response_model=EquipmentRequestRead,
+    summary="Look up equipment request by QR code value",
+)
+async def get_request_by_qr(
+    qr_value: str,
+    current_user: CurrentUser,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> EquipmentRequestRead:
+    if not qr_value.startswith("REQ-"):
+        raise NotFoundError("EquipmentRequest", qr_value)
+    try:
+        request_id = uuid.UUID(qr_value[4:])
+    except ValueError:
+        raise NotFoundError("EquipmentRequest", qr_value)
+    req = await db.get(EquipmentRequest, request_id)
+    if not req:
+        raise NotFoundError("EquipmentRequest", qr_value)
+    return await _build_request_read(req, db)
+
+
+@router.get(
     "/requests/{request_id}",
     response_model=EquipmentRequestRead,
     summary="Get single equipment request",
@@ -307,6 +330,26 @@ async def get_equipment_request(
     if current_user.role in _REQUEST_ROLES and req.requester_id != current_user.id:
         raise ForbiddenError("You may only view your own requests.")
     return await _build_request_read(req, db)
+
+
+@router.get(
+    "/requests/{request_id}/qr",
+    summary="Get QR code image for an equipment request",
+    responses={200: {"content": {"image/png": {}}}},
+)
+async def get_request_qr_code(
+    request_id: uuid.UUID,
+    current_user: CurrentUser,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> Response:
+    req = await db.get(EquipmentRequest, request_id)
+    if not req:
+        raise NotFoundError("EquipmentRequest", str(request_id))
+    if current_user.role in _REQUEST_ROLES and req.requester_id != current_user.id:
+        raise ForbiddenError("You may only view your own requests.")
+    qr_value = f"REQ-{req.id}"
+    qr_bytes = BarcodeService.render_qr(qr_value, box_size=8, border=2)
+    return Response(content=qr_bytes, media_type="image/png")
 
 
 @router.put(

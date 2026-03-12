@@ -162,6 +162,10 @@ export const inventoryApi = {
   listRequests: (params?: Record<string, string | number | boolean>) =>
     api.get("/inventory/requests", { params }),
   getRequest: (id: string) => api.get(`/inventory/requests/${id}`),
+  getRequestQR: (id: string) =>
+    api.get(`/inventory/requests/${id}/qr`, { responseType: "blob" }),
+  getRequestByQR: (qrValue: string) =>
+    api.get(`/inventory/requests/qr/${encodeURIComponent(qrValue)}`),
   approveRequest: (id: string, data?: Record<string, unknown>) =>
     api.put(`/inventory/requests/${id}/approve`, data ?? {}),
   rejectRequest: (id: string, rejection_reason: string) =>

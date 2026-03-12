@@ -65,6 +65,7 @@ export interface UserCreate {
   emergency_contact_name?: string;
   emergency_contact_number?: string;
   biometric_consent?: boolean;
+  is_active?: boolean;
 }
 
 export interface UserUpdate {
