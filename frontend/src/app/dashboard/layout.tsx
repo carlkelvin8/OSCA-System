@@ -47,7 +47,7 @@ const navItems: NavItem[] = [
       href: "/dashboard",
       label: "Dashboard",
       icon: LayoutDashboard,
-      roles: ["admin", "director", "coach", "pe_instructor", "student"],
+      roles: ["admin", "director", "coach", "pe_instructor", "student", "staff"],
     },
     {
       href: "/dashboard/attendance",
@@ -59,12 +59,12 @@ const navItems: NavItem[] = [
       href: "/dashboard/inventory",
       label: "Inventory",
       icon: Package,
-      roles: ["admin", "director", "pe_instructor", "coach"],
+      roles: ["admin", "director", "pe_instructor", "coach", "staff"],
       children: [
         {
           href: "/dashboard/inventory/requests",
           label: "Equipment Requests",
-          roles: ["admin", "director", "coach", "pe_instructor"],
+          roles: ["admin", "director", "coach", "pe_instructor", "staff"],
         },
       ],
     },
@@ -72,7 +72,7 @@ const navItems: NavItem[] = [
       href: "/dashboard/users",
       label: "Users",
       icon: Users,
-      roles: ["admin", "director"],
+      roles: ["admin", "director", "staff"],
     },
     {
       href: "/dashboard/admin/fr-config",
@@ -96,7 +96,7 @@ const navItems: NavItem[] = [
       href: "/dashboard/profile",
       label: "Profile",
       icon: UserCircle,
-      roles: ["admin", "director", "coach", "pe_instructor", "student"],
+      roles: ["admin", "director", "coach", "pe_instructor", "student", "staff"],
     },
   ];
 
@@ -108,6 +108,7 @@ const roleLabel: Record<UserRole, string> = {
   pe_instructor: "PE Instructor",
   student: "Student",
   director: "Director",
+  staff: "Staff",
 };
 
 // ── Breadcrumb helper ─────────────────────────────────────────────────────────

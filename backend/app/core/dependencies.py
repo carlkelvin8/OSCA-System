@@ -105,13 +105,13 @@ def require_roles(*roles: UserRole):
 
 
 # Pre-built role dependencies — Director shares Admin privileges
-AdminOnly = Annotated[User, Depends(require_roles(UserRole.ADMIN, UserRole.DIRECTOR))]
-AdminOrCoach = Annotated[User, Depends(require_roles(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.COACH))]
+AdminOnly = Annotated[User, Depends(require_roles(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.STAFF))]
+AdminOrCoach = Annotated[User, Depends(require_roles(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.STAFF, UserRole.COACH))]
 StaffOnly = Annotated[User, Depends(
-    require_roles(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.COACH, UserRole.PE_INSTRUCTOR)
+    require_roles(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.STAFF, UserRole.COACH, UserRole.PE_INSTRUCTOR)
 )]
 NotStudent = Annotated[User, Depends(
-    require_roles(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.COACH, UserRole.PE_INSTRUCTOR)
+    require_roles(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.STAFF, UserRole.COACH, UserRole.PE_INSTRUCTOR)
 )]
 # For attendance scan — must be logged-in staff (not public, not student)
 ScanStaff = Annotated[User, Depends(

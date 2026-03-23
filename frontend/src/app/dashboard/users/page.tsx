@@ -57,6 +57,7 @@ const roleColors: Record<UserRole, string> = {
   pe_instructor: "bg-purple-100 text-purple-700",
   student: "bg-emerald-100 text-emerald-700",
   director: "bg-amber-100 text-amber-700",
+  staff: "bg-cyan-100 text-cyan-700",
 };
 
 const roleLabel: Record<UserRole, string> = {
@@ -65,9 +66,10 @@ const roleLabel: Record<UserRole, string> = {
   pe_instructor: "PE Instructor",
   student: "Student",
   director: "Director",
+  staff: "Staff",
 };
 
-const ALL_ROLES: UserRole[] = ["admin", "coach", "pe_instructor", "student", "director"];
+const ALL_ROLES: UserRole[] = ["admin", "coach", "pe_instructor", "student", "director", "staff"];
 
 // ── Create User schema ────────────────────────────────────────────────────────
 
@@ -82,7 +84,7 @@ const createUserSchema = z
       .regex(/[A-Z]/, "Needs an uppercase letter")
       .regex(/[0-9]/, "Needs a number"),
     confirmPassword: z.string(),
-    role: z.enum(["admin", "coach", "pe_instructor", "student", "director"] as const),
+    role: z.enum(["admin", "coach", "pe_instructor", "student", "director", "staff"] as const),
     student_id: z.string().optional(),
     course: z.string().optional(),
     year_level: z.string().optional(),

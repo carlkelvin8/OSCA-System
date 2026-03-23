@@ -58,6 +58,14 @@ SEED_USERS = [
         "last_name": "Director",
         "role": UserRole.DIRECTOR,
     },
+    # ── OSCA Staff (inventory management + pending account approval) ──────
+    {
+        "email": "staff@osca.naap.edu.ph",
+        "password": "OSCAStaff2026!",
+        "first_name": "OSCA",
+        "last_name": "Staff",
+        "role": UserRole.STAFF,
+    },
 ]
 
 

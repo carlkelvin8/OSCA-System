@@ -2,8 +2,9 @@
 
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { reportsApi, announcementsApi } from "@/lib/api";
-import { Users, CheckCircle, Package, AlertTriangle, Plus, Pencil, Trash2, Calendar, X, Loader2 } from "lucide-react";
+import { reportsApi, announcementsApi, usersApi } from "@/lib/api";
+import { Users, CheckCircle, Package, AlertTriangle, Plus, Pencil, Trash2, Calendar, X, Loader2, Clock } from "lucide-react";
+import type { UserSummary } from "@/types";
 import type { DashboardSummary, Announcement, PaginatedResponse } from "@/types";
 import { useAuthStore } from "@/store/useAuthStore";
 import { format } from "date-fns";
@@ -167,6 +168,18 @@ export default function DashboardPage() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["announcements"] }),
   });
 
+  // Staff: fetch pending account count for dashboard card
+  const { data: pendingData } = useQuery<PaginatedResponse<UserSummary>>({
+    queryKey: ["users", "pending-count"],
+    queryFn: async () => {
+      const res = await usersApi.list({ page: 1, page_size: 1, is_active: false });
+      return res.data;
+    },
+    enabled: user?.role === "staff" || user?.role === "admin" || user?.role === "director",
+    refetchInterval: 30_000,
+  });
+  const pendingCount = pendingData?.total ?? 0;
+
   const isEditor = user?.role === "admin" || user?.role === "director";
   const announcements = announcementsData?.items ?? [];
 
@@ -181,6 +194,14 @@ export default function DashboardPage() {
   const role = user?.role;
 
   const allStats = [
+    {
+      key: "pending",
+      label: "Pending Accounts",
+      value: pendingCount,
+      sub: "Accounts awaiting approval",
+      icon: Clock,
+      color: pendingCount > 0 ? "bg-amber-500" : "bg-gray-400",
+    },
     {
       key: "students",
       label: "Total Students",
@@ -220,11 +241,13 @@ export default function DashboardPage() {
   // Student: only equipment available + attendance
   // PE Instructor: only equipment + overdue stats
   // Coach: attendance + equipment + overdue (sport-specific label)
+  // Staff: equipment + overdue (inventory-focused)
   // Admin/Director: all stats
   const stats = allStats.filter((s) => {
     if (role === "student") return s.key === "equipment" || s.key === "attendance";
     if (role === "pe_instructor") return s.key === "equipment" || s.key === "overdue";
-    if (role === "coach") return s.key !== "students";
+    if (role === "coach") return s.key !== "students" && s.key !== "pending";
+    if (role === "staff") return s.key === "pending" || s.key === "equipment" || s.key === "overdue";
     return true; // admin, director see all
   });
 

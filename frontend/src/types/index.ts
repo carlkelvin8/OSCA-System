@@ -19,7 +19,7 @@ export interface LoginRequest {
 
 // ── Users ─────────────────────────────────────────────────────────────────────
 
-export type UserRole = "admin" | "coach" | "pe_instructor" | "student" | "director";
+export type UserRole = "admin" | "coach" | "pe_instructor" | "student" | "director" | "staff";
 
 export interface User {
   id: string;

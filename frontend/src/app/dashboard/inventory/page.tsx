@@ -9,7 +9,7 @@ import type { Equipment, PaginatedResponse } from "@/types";
 
 export default function InventoryPage() {
   const role = useAuthStore((s) => s.user?.role);
-  const isAdmin = role === "admin" || role === "director";
+  const isAdmin = role === "admin" || role === "director" || role === "staff";
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
 

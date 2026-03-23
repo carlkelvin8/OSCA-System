@@ -495,7 +495,7 @@ export default function EquipmentRequestsPage() {
   const [showScanner, setShowScanner] = useState(false);
 
   const isRequester = user?.role === "coach" || user?.role === "pe_instructor";
-  const isApprover = user?.role === "admin" || user?.role === "director";
+  const isApprover = user?.role === "admin" || user?.role === "director" || user?.role === "staff";
 
   const { data, isLoading } = useQuery<PaginatedResponse<EquipmentRequest>>({
     queryKey: ["equipment-requests", page, statusFilter],

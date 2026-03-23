@@ -26,6 +26,7 @@ class UserRole(str, enum.Enum):
     PE_INSTRUCTOR = "pe_instructor"  # PE professors — borrow/return transactions
     STUDENT = "student"              # Student athletes/artists — self time-in/out
     DIRECTOR = "director"            # OSCA Director — read-only dashboards
+    STAFF = "staff"                  # OSCA Staff — inventory + pending account approval
 
 
 class User(Base):
