@@ -1,0 +1,397 @@
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=DM+Sans:ital,wght@0,300;0,400;0,500;1,300&display=swap');
+
+/* ── TOP BAR ── */
+.topbar {
+  background: #0f1b35;
+  padding: 0 40px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 60px;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  box-shadow: 0 2px 16px rgba(0,0,0,.35);
+}
+
+.topbarBrand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #ffffff;
+  font-family: 'Outfit', sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  opacity: .88;
+}
+
+.topbarActions { display: flex; align-items: center; gap: 10px; }
+
+.btnTopbar {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 18px;
+  border-radius: 6px;
+  font-family: 'Outfit', sans-serif;
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all .18s;
+  text-decoration: none;
+}
+
+.btnLogin {
+  background: transparent;
+  border: 1.5px solid rgba(255,255,255,.3);
+  color: #ffffff;
+}
+.btnLogin:hover { background: rgba(255,255,255,.08); border-color: rgba(255,255,255,.55); }
+
+.btnRegister {
+  background: #2563eb;
+  border: 1.5px solid #2563eb;
+  color: #ffffff;
+}
+.btnRegister:hover { background: #3b82f6; border-color: #3b82f6; }
+
+/* ── NAV ── */
+.nav {
+  background: #ffffff;
+  border-bottom: 1px solid #e2e8f0;
+  display: flex;
+  justify-content: center;
+  gap: 0;
+  padding: 0 40px;
+}
+
+.navLink {
+  font-family: 'Outfit', sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: #64748b;
+  padding: 14px 22px;
+  text-decoration: none;
+  border-bottom: 2.5px solid transparent;
+  transition: all .18s;
+}
+
+.navLink:hover, .navLinkActive {
+  color: #2563eb;
+  border-bottom-color: #2563eb;
+}
+
+/* ── HERO ── */
+.hero {
+  background: linear-gradient(135deg, #0f1b35 0%, #1e2e55 55%, #1a3a72 100%);
+  padding: 72px 40px 80px;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 60px;
+  align-items: center;
+  position: relative;
+  overflow: hidden;
+}
+
+.hero::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(circle at 70% 40%, rgba(37,99,235,.25) 0%, transparent 55%),
+    radial-gradient(circle at 10% 80%, rgba(16,30,60,.6) 0%, transparent 45%);
+  pointer-events: none;
+}
+
+.hero::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(255,255,255,.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,.03) 1px, transparent 1px);
+  background-size: 48px 48px;
+  pointer-events: none;
+}
+
+.heroLogo {
+  position: relative;
+  z-index: 1;
+  flex-shrink: 0;
+  animation: fadeUp .5s ease both;
+}
+
+.logoCircle {
+  width: 152px;
+  height: 152px;
+  border-radius: 50%;
+  box-shadow:
+    0 0 0 5px rgba(245,200,66,.2),
+    0 8px 32px rgba(0,0,0,.5);
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.logoCircle img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
+}
+
+.heroContent {
+  position: relative;
+  z-index: 1;
+}
+
+.heroLabel {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(37,99,235,.22);
+  border: 1px solid rgba(96,165,250,.3);
+  border-radius: 20px;
+  padding: 5px 14px;
+  font-size: 11.5px;
+  font-weight: 500;
+  letter-spacing: .06em;
+  color: #60a5fa;
+  text-transform: uppercase;
+  margin-bottom: 20px;
+  animation: fadeUp .5s .1s ease both;
+}
+
+.heroDot {
+  width: 6px;
+  height: 6px;
+  background: #60a5fa;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.heroTitle {
+  font-family: 'Outfit', sans-serif;
+  font-size: clamp(30px, 4vw, 48px);
+  font-weight: 800;
+  color: #ffffff;
+  line-height: 1.12;
+  letter-spacing: -.01em;
+  margin-bottom: 18px;
+  animation: fadeUp .5s .18s ease both;
+}
+
+.heroTitleAccent {
+  font-style: normal;
+  color: #60a5fa;
+}
+
+.heroSubtitle {
+  font-size: 15.5px;
+  color: rgba(255,255,255,.65);
+  font-weight: 400;
+  line-height: 1.65;
+  max-width: 560px;
+  animation: fadeUp .5s .32s ease both;
+}
+
+.heroSubtitle strong {
+  color: rgba(255,255,255,.9);
+  font-weight: 500;
+}
+
+.heroDivider {
+  width: 48px;
+  height: 3px;
+  background: linear-gradient(90deg, #2563eb, #60a5fa);
+  border-radius: 2px;
+  margin: 22px 0;
+  animation: fadeUp .5s .26s ease both;
+}
+
+/* ── HERO CTA BUTTONS ── */
+.heroCta {
+  display: flex;
+  gap: 12px;
+  margin-top: 28px;
+  animation: fadeUp .5s .4s ease both;
+}
+
+.btnHeroPrimary {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 28px;
+  border-radius: 8px;
+  font-family: 'Outfit', sans-serif;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-decoration: none;
+  background: #2563eb;
+  color: #ffffff;
+  border: 2px solid #2563eb;
+  transition: all .18s;
+}
+.btnHeroPrimary:hover { background: #3b82f6; border-color: #3b82f6; transform: translateY(-1px); }
+
+.btnHeroSecondary {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 28px;
+  border-radius: 8px;
+  font-family: 'Outfit', sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: .04em;
+  text-decoration: none;
+  background: transparent;
+  color: #ffffff;
+  border: 2px solid rgba(255,255,255,.35);
+  transition: all .18s;
+}
+.btnHeroSecondary:hover { background: rgba(255,255,255,.08); border-color: rgba(255,255,255,.6); }
+
+/* ── CARDS SECTION ── */
+.cardsSection {
+  padding: 56px 40px;
+  max-width: 1200px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 20px;
+}
+
+.card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 32px 28px 30px;
+  position: relative;
+  overflow: hidden;
+  transition: box-shadow .2s, transform .2s;
+}
+
+.card:hover {
+  box-shadow: 0 8px 32px rgba(15,27,53,.1);
+  transform: translateY(-2px);
+}
+
+.card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, #2563eb, #60a5fa);
+  border-radius: 12px 12px 0 0;
+}
+
+.cardBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: 'Outfit', sans-serif;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: #2563eb;
+  background: rgba(37,99,235,.07);
+  border: 1px solid rgba(37,99,235,.15);
+  border-radius: 20px;
+  padding: 4px 12px;
+  margin-bottom: 16px;
+}
+
+.card h3 {
+  font-family: 'Outfit', sans-serif;
+  font-size: 17px;
+  font-weight: 700;
+  color: #0f1b35;
+  margin-bottom: 12px;
+}
+
+.card p {
+  font-size: 14px;
+  color: #64748b;
+  line-height: 1.7;
+}
+
+.card p strong {
+  color: #0f1b35;
+  font-weight: 500;
+}
+
+.cardIcon {
+  font-size: 36px;
+  margin-bottom: 14px;
+  display: block;
+  line-height: 1;
+}
+
+.cardAbout p {
+  font-size: 13.5px;
+}
+
+.card:nth-child(1) { animation: fadeUp .45s .35s ease both; }
+.card:nth-child(2) { animation: fadeUp .45s .45s ease both; }
+.card:nth-child(3) { animation: fadeUp .45s .55s ease both; }
+
+/* ── FOOTER ── */
+.footer {
+  background: #0f1b35;
+  padding: 18px 40px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.footerLeft {
+  display: flex;
+  align-items: center;
+  gap: 22px;
+  color: rgba(255,255,255,.5);
+  font-size: 12.5px;
+}
+
+.footerLeft a {
+  color: rgba(255,255,255,.5);
+  text-decoration: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: color .15s;
+}
+
+.footerLeft a:hover { color: rgba(255,255,255,.8); }
+
+.footerRight {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  color: rgba(255,255,255,.4);
+  font-size: 12px;
+}
+
+.footerRight a {
+  color: rgba(255,255,255,.4);
+  text-decoration: none;
+  transition: color .15s;
+}
+.footerRight a:hover { color: rgba(255,255,255,.7); }
+
+.footerDivider { color: rgba(255,255,255,.2); }
+
+/* ── ANIMATIONS ── */
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(22px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
