@@ -24,6 +24,7 @@ import {
   UserCircle,
 } from "lucide-react";
 import { useAuthStore } from "@/store/useAuthStore";
+import { OfflineBanner } from "@/components/ui/OfflineBanner";
 import type { UserRole } from "@/types";
 
 // ── Nav definition ────────────────────────────────────────────────────────────
@@ -292,6 +293,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             </div>
           </div>
         </header>
+
+        {/* Offline banner */}
+        <OfflineBanner />
 
         {/* Page content */}
         <main className="flex-1 overflow-auto">

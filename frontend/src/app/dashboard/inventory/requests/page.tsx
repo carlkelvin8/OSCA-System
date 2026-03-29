@@ -9,13 +9,15 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { inventoryApi } from "@/lib/api";
 import {
-  CheckCircle2, XCircle, Clock, Plus, X, Loader2, Package, QrCode, ScanLine,
+  CheckCircle2, XCircle, Clock, Plus, X, Loader2, Package, QrCode, ScanLine, WifiOff,
 } from "lucide-react";
 import type {
   EquipmentRequest, PaginatedResponse, RequestStatus, Equipment,
 } from "@/types";
 import { useAuthStore } from "@/store/useAuthStore";
 import { format } from "date-fns";
+import { equipmentCache } from "@/lib/offlineStore";
+import { useNetworkStatus } from "@/hooks/useNetworkStatus";
 
 // ── Status badge helper ────────────────────────────────────────────────────────
 
@@ -88,6 +90,11 @@ interface ScannedRequest {
   status: RequestStatus;
 }
 
+interface ScannedEquipmentInfo {
+  equipment: Equipment;
+  source: "server" | "cache";
+}
+
 function QRScannerModal({ onClose, onApprove }: {
   onClose: () => void;
   onApprove: (requestId: string) => void;
@@ -95,9 +102,11 @@ function QRScannerModal({ onClose, onApprove }: {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [error, setError] = useState<string | null>(null);
   const [scannedRequest, setScannedRequest] = useState<ScannedRequest | null>(null);
+  const [scannedEquipment, setScannedEquipment] = useState<ScannedEquipmentInfo | null>(null);
   const [scanning, setScanning] = useState(true);
   const readerRef = useRef<import("@zxing/browser").BrowserQRCodeReader | null>(null);
   const controlsRef = useRef<{ stop: () => void } | null>(null);
+  const { isServerReachable } = useNetworkStatus();
 
   const stopScanning = useCallback(() => {
     controlsRef.current?.stop();
@@ -120,16 +129,42 @@ function QRScannerModal({ onClose, onApprove }: {
           async (result, _err) => {
             if (cancelled || !result) return;
             const text = result.getText();
-            if (!text.startsWith("REQ-")) return;
 
             stopScanning();
             setScanning(false);
 
-            try {
-              const res = await inventoryApi.getRequestByQR(text);
-              setScannedRequest(res.data);
-            } catch {
-              setError("Request not found or invalid QR code.");
+            // Handle request QR codes (REQ- prefix)
+            if (text.startsWith("REQ-")) {
+              if (!isServerReachable) {
+                setError("Cannot approve requests while offline. Request QR codes require server connection.");
+                return;
+              }
+              try {
+                const res = await inventoryApi.getRequestByQR(text);
+                setScannedRequest(res.data);
+              } catch {
+                setError("Request not found or invalid QR code.");
+              }
+              return;
+            }
+
+            // Handle equipment QR codes — try server first, fall back to cache
+            if (isServerReachable) {
+              try {
+                const res = await inventoryApi.getEquipmentByQR(text);
+                setScannedEquipment({ equipment: res.data, source: "server" });
+                return;
+              } catch {
+                // Server didn't find it, try cache
+              }
+            }
+
+            // Offline or server miss — look up in local cache
+            const cached = equipmentCache.findByQR(text);
+            if (cached) {
+              setScannedEquipment({ equipment: cached, source: "cache" });
+            } else {
+              setError(`QR code "${text}" not found${!isServerReachable ? " (offline — using cached data)" : ""}.`);
             }
           }
         );
@@ -143,12 +178,19 @@ function QRScannerModal({ onClose, onApprove }: {
       cancelled = true;
       stopScanning();
     };
-  }, [scanning, stopScanning]);
+  }, [scanning, stopScanning, isServerReachable]);
 
   const handleApprove = () => {
     if (!scannedRequest) return;
     onApprove(scannedRequest.id);
     onClose();
+  };
+
+  const handleRescan = () => {
+    setError(null);
+    setScannedRequest(null);
+    setScannedEquipment(null);
+    setScanning(true);
   };
 
   return (
@@ -158,17 +200,24 @@ function QRScannerModal({ onClose, onApprove }: {
     >
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
-          <h2 className="text-lg font-bold text-gray-900">Scan Request QR</h2>
+          <h2 className="text-lg font-bold text-gray-900">Scan QR Code</h2>
           <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400">
             <X size={18} />
           </button>
         </div>
 
+        {!isServerReachable && (
+          <div className="flex items-center gap-2 px-6 py-2 bg-amber-50 text-amber-700 text-xs border-b border-amber-200">
+            <WifiOff size={12} />
+            Offline — equipment lookup uses cached data
+          </div>
+        )}
+
         <div className="px-6 py-5 space-y-4">
           {scanning && (
             <>
               <p className="text-sm text-gray-500 text-center">
-                Point the camera at the borrower&apos;s QR code
+                Point the camera at a QR code
               </p>
               <div className="relative bg-black rounded-xl overflow-hidden aspect-square">
                 <video ref={videoRef} className="w-full h-full object-cover" />
@@ -182,15 +231,48 @@ function QRScannerModal({ onClose, onApprove }: {
           {error && (
             <div className="text-center space-y-3">
               <p className="text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2">{error}</p>
-              <button
-                onClick={() => { setError(null); setScanning(true); }}
-                className="text-sm text-[#1E3A5F] underline"
-              >
-                Try again
+              <button onClick={handleRescan} className="text-sm text-[#1E3A5F] underline">
+                Scan again
               </button>
             </div>
           )}
 
+          {/* Equipment scan result */}
+          {scannedEquipment && (
+            <div className="space-y-4">
+              {scannedEquipment.source === "cache" && (
+                <p className="text-xs text-amber-600 bg-amber-50 rounded-lg px-3 py-1.5 text-center">
+                  Showing cached data — quantities may not be current
+                </p>
+              )}
+              <div className="p-4 bg-gray-50 rounded-xl space-y-2">
+                <p className="text-sm font-semibold text-gray-900">{scannedEquipment.equipment.name}</p>
+                <p className="text-xs text-gray-500 capitalize">
+                  {scannedEquipment.equipment.category.replace("_", " ")} · {scannedEquipment.equipment.condition.replace("_", " ")}
+                </p>
+                <div className="flex gap-4 text-xs">
+                  <span className="text-gray-600">Total: <strong>{scannedEquipment.equipment.total_quantity}</strong></span>
+                  <span className={scannedEquipment.equipment.available_quantity === 0 ? "text-red-600" : "text-green-600"}>
+                    Available: <strong>{scannedEquipment.equipment.available_quantity}</strong>
+                  </span>
+                </div>
+                {scannedEquipment.equipment.storage_location && (
+                  <p className="text-xs text-gray-500">Location: {scannedEquipment.equipment.storage_location}</p>
+                )}
+                <p className="font-mono text-xs text-gray-400">{scannedEquipment.equipment.qr_code}</p>
+              </div>
+              <div className="flex justify-end gap-3">
+                <button onClick={handleRescan} className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg transition">
+                  Scan Another
+                </button>
+                <button onClick={onClose} className="px-4 py-2 text-sm bg-[#1E3A5F] text-white rounded-lg hover:bg-[#16304f] transition">
+                  Done
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Request scan result */}
           {scannedRequest && (
             <div className="space-y-4">
               <div className="p-4 bg-gray-50 rounded-xl space-y-2">
