@@ -176,6 +176,26 @@ async def update_equipment(
 
 # ── Borrowing ID ──────────────────────────────────────────────────────────────
 
+@router.get(
+    "/borrowing-ids/me",
+    response_model=BorrowingIDRead,
+    summary="Get the current user's own Borrowing ID card",
+)
+async def get_my_borrowing_id(
+    current_user: CurrentUser,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> BorrowingIDRead:
+    result = await db.execute(
+        select(BorrowingID).where(BorrowingID.instructor_id == current_user.id)
+    )
+    bid = result.scalar_one_or_none()
+    if not bid:
+        raise NotFoundError("Borrowing ID", str(current_user.id))
+    schema = BorrowingIDRead.model_validate(bid)
+    schema.instructor_name = current_user.full_name
+    return schema
+
+
 @router.post(
     "/borrowing-ids/{instructor_id}",
     response_model=BorrowingIDRead,

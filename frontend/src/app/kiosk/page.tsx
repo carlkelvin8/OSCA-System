@@ -11,11 +11,12 @@ import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import Webcam from "react-webcam";
 import { useFacialRecognition } from "@/hooks/useFacialRecognition";
-import { CheckCircle2, XCircle, AlertCircle, Loader2, ChevronDown } from "lucide-react";
+import { CheckCircle2, XCircle, AlertCircle, Loader2, ChevronDown, ArrowLeft } from "lucide-react";
 import type { FaceScanResponse, PaginatedResponse, Session } from "@/types";
 import { attendanceApi } from "@/lib/api";
 import { useAuthStore } from "@/store/useAuthStore";
 import { format } from "date-fns";
+import Link from "next/link";
 
 const ALLOWED_ROLES = ["admin", "coach", "pe_instructor"] as const;
 
@@ -107,6 +108,15 @@ export default function KioskPage() {
   if (!selectedSessionId) {
     return (
       <div className="min-h-screen bg-[#1E3A5F] flex flex-col items-center justify-center p-8">
+        {/* Back to dashboard */}
+        <div className="absolute top-4 left-4">
+          <Link
+            href="/dashboard"
+            className="flex items-center gap-1.5 px-3 py-2 text-sm text-blue-200 hover:text-white bg-white/10 hover:bg-white/20 rounded-lg transition"
+          >
+            <ArrowLeft size={15} /> Dashboard
+          </Link>
+        </div>
         <div className="text-center text-white mb-8">
           <h1 className="text-3xl font-bold">OSCA Attendance Scan</h1>
           <p className="text-blue-200 mt-2">NAAP-Villamor Campus</p>
@@ -158,6 +168,15 @@ export default function KioskPage() {
 
   return (
     <div className="min-h-screen bg-[#1E3A5F] flex flex-col items-center justify-center p-8">
+      {/* Back button */}
+      <div className="absolute top-4 left-4">
+        <Link
+          href="/dashboard"
+          className="flex items-center gap-1.5 px-3 py-2 text-sm text-blue-200 hover:text-white bg-white/10 hover:bg-white/20 rounded-lg transition"
+        >
+          <ArrowLeft size={15} /> Dashboard
+        </Link>
+      </div>
       {/* Header */}
       <div className="text-center text-white mb-8">
         <h1 className="text-3xl font-bold">OSCA Attendance Scan</h1>

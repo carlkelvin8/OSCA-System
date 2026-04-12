@@ -1,11 +1,35 @@
 "use client";
 
+import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useAuthStore } from "@/store/useAuthStore";
-import { User as UserIcon, Mail, Shield, Calendar, Activity } from "lucide-react";
+import { inventoryApi } from "@/lib/api";
+import { User as UserIcon, Mail, Shield, Calendar, Activity, QrCode } from "lucide-react";
 import { format } from "date-fns";
+import QRCode from "qrcode";
 
 export default function ProfilePage() {
   const { user } = useAuthStore();
+  const hasBorrowingQR = user?.role === "coach" || user?.role === "pe_instructor";
+  const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
+
+  const { data: borrowingId } = useQuery({
+    queryKey: ["borrowing-id-me"],
+    queryFn: async () => {
+      const res = await inventoryApi.getMyBorrowingId();
+      return res.data as { qr_code: string; is_active: boolean };
+    },
+    enabled: hasBorrowingQR,
+    retry: false,
+  });
+
+  useEffect(() => {
+    if (borrowingId?.qr_code) {
+      QRCode.toDataURL(borrowingId.qr_code, { width: 200, margin: 2 })
+        .then(setQrDataUrl)
+        .catch(() => setQrDataUrl(null));
+    }
+  }, [borrowingId?.qr_code]);
 
   if (!user) return null;
 
@@ -87,6 +111,43 @@ export default function ProfilePage() {
           );
         })}
       </div>
+
+      {/* Borrowing QR — Coach / PE Instructor only */}
+      {hasBorrowingQR && (
+        <div className="bg-white rounded-xl shadow-sm p-5">
+          <div className="flex items-center gap-2 mb-4">
+            <QrCode size={18} className="text-[#1E3A5F]" />
+            <h2 className="text-sm font-semibold text-gray-900">Borrowing ID QR Code</h2>
+          </div>
+          {qrDataUrl ? (
+            <div className="flex flex-col items-center gap-3">
+              <img src={qrDataUrl} alt="Borrowing QR Code" className="w-40 h-40 rounded-lg border border-gray-100" />
+              <p className="text-xs text-gray-500 text-center">
+                Present this QR code when borrowing equipment from the OSCA office.
+              </p>
+              <button
+                onClick={() => {
+                  const win = window.open("", "_blank", "width=400,height=500");
+                  win?.document.write(
+                    `<html><body style="text-align:center;padding:20px;font-family:sans-serif">
+                    <h2>Borrowing ID — ${user.full_name}</h2>
+                    <img src="${qrDataUrl}" style="width:200px"/>
+                    <p style="font-size:12px;color:#666">${user.role.replace("_"," ").toUpperCase()} · ${user.sport_or_art ?? ""}</p>
+                    <script>window.print()</script></body></html>`
+                  );
+                }}
+                className="px-4 py-1.5 text-xs border border-gray-200 rounded-lg hover:bg-gray-50 transition"
+              >
+                Print QR
+              </button>
+            </div>
+          ) : (
+            <p className="text-sm text-gray-400 text-center py-4">
+              No Borrowing ID issued yet. Contact the OSCA administrator to generate one.
+            </p>
+          )}
+        </div>
+      )}
 
       {/* Status badges */}
       <div className="flex flex-wrap gap-3">

@@ -2,10 +2,12 @@
 
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useRouter } from "next/navigation";
 import { attendanceApi } from "@/lib/api";
 import { useAuthStore } from "@/store/useAuthStore";
-import { CalendarCheck, Plus, X, Loader2 } from "lucide-react";
-import type { Session, ActivityType, PaginatedResponse } from "@/types";
+import { CalendarCheck, Plus, X, Loader2, Users, ClipboardList, CheckCircle2, XCircle } from "lucide-react";
+import Link from "next/link";
+import type { Session, ActivityType, AttendanceRecord, PaginatedResponse } from "@/types";
 import { format } from "date-fns";
 
 // ── New Session Modal ──────────────────────────────────────────────────────────
@@ -238,17 +240,32 @@ function NewSessionModal({ onClose, defaultSport }: NewSessionModalProps) {
 
 export default function AttendancePage() {
   const { user } = useAuthStore();
+  const router = useRouter();
   const isCoach = user?.role === "coach";
-  const coachSport = user?.sport_or_art ?? undefined;
+  const isStudent = user?.role === "student";
+  const userSport = user?.sport_or_art ?? undefined;
   const [page, setPage] = useState(1);
   const [showNewSession, setShowNewSession] = useState(false);
+  const [activeTab, setActiveTab] = useState<"sessions" | "history">("sessions");
 
   const { data, isLoading } = useQuery<PaginatedResponse<Session>>({
-    queryKey: ["sessions", page],
+    queryKey: ["sessions", page, userSport, isStudent],
     queryFn: async () => {
-      const res = await attendanceApi.listSessions({ page, page_size: 20 });
+      const params: Record<string, string | number> = { page, page_size: 20 };
+      if ((isCoach || isStudent) && userSport) params.sport = userSport;
+      const res = await attendanceApi.listSessions(params);
       return res.data;
     },
+  });
+
+  // Student: fetch own attendance history
+  const { data: historyData, isLoading: historyLoading } = useQuery<PaginatedResponse<AttendanceRecord>>({
+    queryKey: ["my-attendance", user?.id],
+    queryFn: async () => {
+      const res = await attendanceApi.getRecords({ student_id: user!.id, page_size: 50 });
+      return res.data;
+    },
+    enabled: isStudent && !!user?.id,
   });
 
   const activityColors: Record<string, string> = {
@@ -263,109 +280,220 @@ export default function AttendancePage() {
 
   return (
     <>
-      {showNewSession && <NewSessionModal onClose={() => setShowNewSession(false)} defaultSport={coachSport} />}
+      {showNewSession && <NewSessionModal onClose={() => setShowNewSession(false)} defaultSport={userSport} />}
 
       <div className="space-y-6">
+        {/* Header */}
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Attendance</h1>
             <p className="text-sm text-gray-500">
-              {isCoach && coachSport
-                ? `Sessions for ${coachSport}`
+              {(isCoach || isStudent) && userSport
+                ? `Sessions for ${userSport}`
                 : "Manage sessions and view attendance records"}
             </p>
           </div>
-          <button
-            onClick={() => setShowNewSession(true)}
-            className="flex items-center gap-2 px-4 py-2 text-sm bg-[#1E3A5F] text-white rounded-lg hover:bg-[#16304f] transition"
-          >
-            <Plus size={16} /> New Session
-          </button>
+          <div className="flex gap-2">
+            {isCoach && (
+              <Link
+                href="/dashboard/attendance/roster"
+                className="flex items-center gap-2 px-4 py-2 text-sm border border-gray-200 rounded-lg hover:bg-gray-50 transition"
+              >
+                <Users size={16} /> Player Roster
+              </Link>
+            )}
+            {!isStudent && (
+              <button
+                onClick={() => setShowNewSession(true)}
+                className="flex items-center gap-2 px-4 py-2 text-sm bg-[#1E3A5F] text-white rounded-lg hover:bg-[#16304f] transition"
+              >
+                <Plus size={16} /> New Session
+              </button>
+            )}
+          </div>
         </div>
 
-        <div className="bg-white rounded-xl shadow-sm overflow-hidden">
-          <table className="w-full text-sm">
-            <thead className="bg-[#1E3A5F] text-white">
-              <tr>
-                <th className="px-4 py-3 text-left font-medium">Session Name</th>
-                <th className="px-4 py-3 text-left font-medium">Activity</th>
-                <th className="px-4 py-3 text-left font-medium">Sport/Art</th>
-                <th className="px-4 py-3 text-left font-medium">Date & Time</th>
-                <th className="px-4 py-3 text-center font-medium">Attendance</th>
-                <th className="px-4 py-3 text-center font-medium">Status</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {isLoading ? (
-                <tr>
-                  <td colSpan={6} className="px-4 py-8 text-center text-gray-400">
-                    <Loader2 size={20} className="animate-spin inline-block mr-2" />
-                    Loading…
-                  </td>
-                </tr>
-              ) : (data?.items ?? []).length === 0 ? (
-                <tr>
-                  <td colSpan={6} className="px-4 py-10 text-center text-gray-400 text-sm">
-                    No sessions yet.{" "}
-                    <button
-                      onClick={() => setShowNewSession(true)}
-                      className="text-[#1E3A5F] underline underline-offset-2"
-                    >
-                      Create the first one.
-                    </button>
-                  </td>
-                </tr>
-              ) : (data?.items ?? []).map((session) => (
-                <tr key={session.id} className="hover:bg-gray-50 cursor-pointer">
-                  <td className="px-4 py-3 font-medium text-gray-900">
-                    <div className="flex items-center gap-2">
-                      <CalendarCheck size={16} className="text-gray-400" />
-                      {session.name}
-                    </div>
-                  </td>
-                  <td className="px-4 py-3">
-                    <span className={`px-2 py-0.5 rounded-full text-xs font-medium capitalize ${activityColors[session.activity_type] ?? ""}`}>
-                      {session.activity_type}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-gray-600">{session.sport_or_art ?? "—"}</td>
-                  <td className="px-4 py-3 text-gray-600 text-xs">
-                    {format(new Date(session.scheduled_start), "MMM d, yyyy · h:mm a")}
-                  </td>
-                  <td className="px-4 py-3 text-center font-semibold text-[#1E3A5F]">
-                    {session.attendance_count}
-                  </td>
-                  <td className="px-4 py-3 text-center">
-                    <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${session.is_active ? "bg-green-100 text-green-800" : "bg-gray-100 text-gray-500"}`}>
-                      {session.is_active ? "Active" : "Closed"}
-                    </span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        {/* Student tabs */}
+        {isStudent && (
+          <div className="flex gap-1 bg-gray-100 p-1 rounded-lg w-fit">
+            <button
+              onClick={() => setActiveTab("sessions")}
+              className={`flex items-center gap-1.5 px-4 py-1.5 text-sm rounded-md font-medium transition ${
+                activeTab === "sessions" ? "bg-white shadow-sm text-gray-900" : "text-gray-500 hover:text-gray-700"
+              }`}
+            >
+              <CalendarCheck size={14} /> Sessions
+            </button>
+            <button
+              onClick={() => setActiveTab("history")}
+              className={`flex items-center gap-1.5 px-4 py-1.5 text-sm rounded-md font-medium transition ${
+                activeTab === "history" ? "bg-white shadow-sm text-gray-900" : "text-gray-500 hover:text-gray-700"
+              }`}
+            >
+              <ClipboardList size={14} /> My Attendance
+            </button>
+          </div>
+        )}
 
-        {/* Pagination */}
-        {totalPages > 1 && (
-          <div className="flex items-center justify-center gap-2">
-            <button
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
-              disabled={page === 1}
-              className="px-3 py-1.5 text-sm border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition"
-            >
-              Previous
-            </button>
-            <span className="text-sm text-gray-500">
-              Page {page} of {totalPages}
-            </span>
-            <button
-              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-              disabled={page === totalPages}
-              className="px-3 py-1.5 text-sm border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition"
-            >
-              Next
-            </button>
+        {/* ── Sessions tab (default for all, or when tab = sessions) ── */}
+        {(!isStudent || activeTab === "sessions") && (
+          <>
+            <div className="bg-white rounded-xl shadow-sm overflow-hidden">
+              <table className="w-full text-sm">
+                <thead className="bg-[#1E3A5F] text-white">
+                  <tr>
+                    <th className="px-4 py-3 text-left font-medium">Session Name</th>
+                    <th className="px-4 py-3 text-left font-medium">Activity</th>
+                    <th className="px-4 py-3 text-left font-medium">Sport/Art</th>
+                    <th className="px-4 py-3 text-left font-medium">Date & Time</th>
+                    <th className="px-4 py-3 text-center font-medium">Attendance</th>
+                    <th className="px-4 py-3 text-center font-medium">Status</th>
+                    <th className="px-4 py-3 text-center font-medium">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {isLoading ? (
+                    <tr>
+                      <td colSpan={7} className="px-4 py-8 text-center text-gray-400">
+                        <Loader2 size={20} className="animate-spin inline-block mr-2" />Loading…
+                      </td>
+                    </tr>
+                  ) : (data?.items ?? []).length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="px-4 py-10 text-center text-gray-400 text-sm">
+                        No sessions yet.{!isStudent && (
+                          <button onClick={() => setShowNewSession(true)} className="ml-1 text-[#1E3A5F] underline underline-offset-2">
+                            Create the first one.
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  ) : (data?.items ?? []).map((session) => (
+                    <tr key={session.id} className="hover:bg-gray-50">
+                      <td className="px-4 py-3 font-medium text-gray-900">
+                        <div className="flex items-center gap-2">
+                          <CalendarCheck size={16} className="text-gray-400" />
+                          {session.name}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium capitalize ${activityColors[session.activity_type] ?? ""}`}>
+                          {session.activity_type}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-gray-600">{session.sport_or_art ?? "—"}</td>
+                      <td className="px-4 py-3 text-gray-600 text-xs">
+                        {format(new Date(session.scheduled_start), "MMM d, yyyy · h:mm a")}
+                      </td>
+                      <td className="px-4 py-3 text-center font-semibold text-[#1E3A5F]">
+                        {session.attendance_count}
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${session.is_active ? "bg-green-100 text-green-800" : "bg-gray-100 text-gray-500"}`}>
+                          {session.is_active ? "Active" : "Closed"}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        {isStudent ? (
+                          <button
+                            onClick={() => router.push(`/dashboard/attendance/${session.id}/scan`)}
+                            className="px-3 py-1 text-xs bg-green-600 text-white rounded-lg hover:bg-green-700 transition"
+                          >
+                            Scan In
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => router.push(`/dashboard/attendance/${session.id}`)}
+                            className="px-3 py-1 text-xs bg-[#1E3A5F] text-white rounded-lg hover:bg-[#16304f] transition"
+                          >
+                            Monitor
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {totalPages > 1 && (
+              <div className="flex items-center justify-center gap-2">
+                <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1}
+                  className="px-3 py-1.5 text-sm border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition">
+                  Previous
+                </button>
+                <span className="text-sm text-gray-500">Page {page} of {totalPages}</span>
+                <button onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page === totalPages}
+                  className="px-3 py-1.5 text-sm border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition">
+                  Next
+                </button>
+              </div>
+            )}
+          </>
+        )}
+
+        {/* ── My Attendance History tab (students only) ── */}
+        {isStudent && activeTab === "history" && (
+          <div className="bg-white rounded-xl shadow-sm overflow-hidden">
+            <table className="w-full text-sm">
+              <thead className="bg-[#1E3A5F] text-white">
+                <tr>
+                  <th className="px-4 py-3 text-left font-medium">Session</th>
+                  <th className="px-4 py-3 text-left font-medium">Date</th>
+                  <th className="px-4 py-3 text-center font-medium">Status</th>
+                  <th className="px-4 py-3 text-center font-medium">Time In</th>
+                  <th className="px-4 py-3 text-center font-medium">Time Out</th>
+                  <th className="px-4 py-3 text-center font-medium">Duration</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {historyLoading ? (
+                  <tr>
+                    <td colSpan={6} className="px-4 py-8 text-center text-gray-400">
+                      <Loader2 size={20} className="animate-spin inline-block mr-2" />Loading…
+                    </td>
+                  </tr>
+                ) : (historyData?.items ?? []).length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="px-4 py-10 text-center text-gray-400 text-sm">
+                      No attendance records yet. Scan in to a session to record attendance.
+                    </td>
+                  </tr>
+                ) : (historyData?.items ?? []).map((record) => (
+                  <tr key={record.id} className="hover:bg-gray-50">
+                    <td className="px-4 py-3 font-medium text-gray-900">
+                      <div className="flex items-center gap-2">
+                        <CalendarCheck size={14} className="text-gray-400" />
+                        {record.student_name || "Session"}
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 text-gray-600 text-xs">
+                      {record.time_in ? format(new Date(record.time_in), "MMM d, yyyy") : "—"}
+                    </td>
+                    <td className="px-4 py-3 text-center">
+                      {record.time_in ? (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                          <CheckCircle2 size={11} /> Present
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                          <XCircle size={11} /> Absent
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-center text-xs text-gray-600">
+                      {record.time_in ? format(new Date(record.time_in), "h:mm a") : "—"}
+                    </td>
+                    <td className="px-4 py-3 text-center text-xs text-gray-600">
+                      {record.time_out ? format(new Date(record.time_out), "h:mm a") : "—"}
+                    </td>
+                    <td className="px-4 py-3 text-center text-xs text-gray-600">
+                      {record.duration_minutes ? `${record.duration_minutes} min` : "—"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         )}
       </div>

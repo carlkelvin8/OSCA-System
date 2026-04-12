@@ -132,6 +132,8 @@ export const attendanceApi = {
     api.post("/attendance/sessions", data),
   listSessions: (params?: Record<string, string | number | boolean>) =>
     api.get("/attendance/sessions", { params }),
+  getSession: (id: string) =>
+    api.get(`/attendance/sessions/${id}`),
   scan: (data: Record<string, unknown>) =>
     api.post("/attendance/scan", data),
   enroll: (data: Record<string, unknown>) =>
@@ -150,6 +152,8 @@ export const inventoryApi = {
     api.post("/inventory/equipment", data),
   updateEquipment: (id: string, data: Record<string, unknown>) =>
     api.patch(`/inventory/equipment/${id}`, data),
+  getMyBorrowingId: () =>
+    api.get("/inventory/borrowing-ids/me"),
   issueBorrowingId: (instructorId: string) =>
     api.post(`/inventory/borrowing-ids/${instructorId}`),
   borrow: (data: Record<string, unknown>) => api.post("/inventory/borrow", data),

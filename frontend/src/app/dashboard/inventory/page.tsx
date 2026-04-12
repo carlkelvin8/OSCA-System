@@ -4,11 +4,75 @@ import { useState, useEffect } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { inventoryApi, reportsApi } from "@/lib/api";
 import { useAuthStore } from "@/store/useAuthStore";
-import { Package, Download, Plus, Search, QrCode, X, Printer, WifiOff, Loader2 } from "lucide-react";
+import { Package, Download, Plus, Search, QrCode, X, Printer, WifiOff, Loader2, Pencil } from "lucide-react";
 import { useNetworkStatus } from "@/hooks/useNetworkStatus";
 import { useInventoryList, useInvalidateInventory } from "@/hooks/useInventoryData";
 import type { Equipment, EquipmentCategory, EquipmentCondition } from "@/types";
 import QRCode from "qrcode";
+
+// ── Autocomplete suggestions ─────────────────────────────────────────────────
+
+const EQUIPMENT_SUGGESTIONS = [
+  "Agility Ladder", "Ball Cart", "Basketball", "Cones", "Disc Cones",
+  "Dumbbells", "Floor Mats", "Hurdles", "Kettle Bell", "Scoreboard",
+  "Volleyball", "Yoga Mats",
+];
+
+const SPORT_SUGGESTIONS = [
+  "Arnis", "Badminton", "Basketball", "Boxing", "Chess", "Choir",
+  "Dance", "Fine Arts", "Football", "Gymnastics", "Swimming",
+  "Table Tennis", "Theater Arts", "Track and Field", "Volleyball",
+];
+
+// ── AutocompleteInput ────────────────────────────────────────────────────────
+
+function AutocompleteInput({
+  value,
+  onChange,
+  suggestions,
+  placeholder,
+  inputCls,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  suggestions: string[];
+  placeholder?: string;
+  inputCls: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const filtered = suggestions.filter((s) =>
+    s.toLowerCase().includes(value.toLowerCase())
+  );
+
+  return (
+    <div className="relative">
+      <input
+        type="text"
+        value={value}
+        onChange={(e) => { onChange(e.target.value); setOpen(true); }}
+        onFocus={() => setOpen(true)}
+        onBlur={() => setTimeout(() => setOpen(false), 150)}
+        placeholder={placeholder}
+        className={inputCls}
+        autoComplete="off"
+      />
+      {open && filtered.length > 0 && (
+        <div className="absolute z-20 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-44 overflow-y-auto">
+          {filtered.map((s) => (
+            <button
+              key={s}
+              type="button"
+              onMouseDown={() => { onChange(s); setOpen(false); }}
+              className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50"
+            >
+              {s}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 // ── QR Code View Modal ───────────────────────────────────────────────────────
 
@@ -163,13 +227,12 @@ function AddEquipmentModal({ onClose, onSuccess }: { onClose: () => void; onSucc
           {/* Name */}
           <div>
             <label className={labelCls}>Equipment Name <span className="text-red-500">*</span></label>
-            <input
-              type="text"
+            <AutocompleteInput
               value={form.name}
-              onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+              onChange={(v) => setForm((f) => ({ ...f, name: v }))}
+              suggestions={EQUIPMENT_SUGGESTIONS}
               placeholder="e.g. Basketball"
-              className={inputCls}
-              required
+              inputCls={inputCls}
             />
           </div>
 
@@ -229,12 +292,12 @@ function AddEquipmentModal({ onClose, onSuccess }: { onClose: () => void; onSucc
           {/* Sport / Art */}
           <div>
             <label className={labelCls}>Sport / Art</label>
-            <input
-              type="text"
+            <AutocompleteInput
               value={form.sport_or_art}
-              onChange={(e) => setForm((f) => ({ ...f, sport_or_art: e.target.value }))}
+              onChange={(v) => setForm((f) => ({ ...f, sport_or_art: v }))}
+              suggestions={SPORT_SUGGESTIONS}
               placeholder="e.g. Basketball, Dance"
-              className={inputCls}
+              inputCls={inputCls}
             />
           </div>
 
@@ -276,6 +339,240 @@ function AddEquipmentModal({ onClose, onSuccess }: { onClose: () => void; onSucc
   );
 }
 
+// ── Edit Equipment Modal ─────────────────────────────────────────────────────
+
+interface EditEquipmentForm {
+  name: string;
+  description: string;
+  category: EquipmentCategory;
+  condition: EquipmentCondition;
+  total_quantity: number;
+  available_quantity: number;
+  storage_location: string;
+  sport_or_art: string;
+  is_active: boolean;
+}
+
+function EditEquipmentModal({
+  equipment,
+  onClose,
+  onSuccess,
+}: {
+  equipment: Equipment;
+  onClose: () => void;
+  onSuccess: () => void;
+}) {
+  const [form, setForm] = useState<EditEquipmentForm>({
+    name: equipment.name,
+    description: equipment.description ?? "",
+    category: equipment.category,
+    condition: equipment.condition,
+    total_quantity: equipment.total_quantity,
+    available_quantity: equipment.available_quantity,
+    storage_location: equipment.storage_location ?? "",
+    sport_or_art: equipment.sport_or_art ?? "",
+    is_active: equipment.is_active,
+  });
+  const [error, setError] = useState<string | null>(null);
+
+  const mutation = useMutation({
+    mutationFn: (data: EditEquipmentForm) =>
+      inventoryApi.updateEquipment(equipment.id, {
+        ...data,
+        description: data.description || null,
+        storage_location: data.storage_location || null,
+        sport_or_art: data.sport_or_art || null,
+      }),
+    onSuccess: () => {
+      onSuccess();
+      onClose();
+    },
+    onError: (err: unknown) => {
+      const msg =
+        (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ??
+        "Failed to update equipment.";
+      setError(msg);
+    },
+  });
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    if (!form.name.trim()) { setError("Equipment name is required."); return; }
+    if (form.total_quantity < 1) { setError("Total quantity must be at least 1."); return; }
+    if (form.available_quantity < 0) { setError("Available quantity cannot be negative."); return; }
+    if (form.available_quantity > form.total_quantity) {
+      setError("Available quantity cannot exceed total quantity.");
+      return;
+    }
+    mutation.mutate(form);
+  };
+
+  const inputCls = "w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1E3A5F]";
+  const labelCls = "block text-xs font-medium text-gray-700 mb-1";
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4"
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6 space-y-5 max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-bold text-gray-900">Edit Equipment</h2>
+          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400">
+            <X size={18} />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          {/* Name */}
+          <div>
+            <label className={labelCls}>Equipment Name <span className="text-red-500">*</span></label>
+            <AutocompleteInput
+              value={form.name}
+              onChange={(v) => setForm((f) => ({ ...f, name: v }))}
+              suggestions={EQUIPMENT_SUGGESTIONS}
+              placeholder="e.g. Basketball"
+              inputCls={inputCls}
+            />
+          </div>
+
+          {/* Category + Condition */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className={labelCls}>Category <span className="text-red-500">*</span></label>
+              <select
+                value={form.category}
+                onChange={(e) => setForm((f) => ({ ...f, category: e.target.value as EquipmentCategory }))}
+                className={inputCls}
+              >
+                {CATEGORIES.map((c) => (
+                  <option key={c.value} value={c.value}>{c.label}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className={labelCls}>Condition <span className="text-red-500">*</span></label>
+              <select
+                value={form.condition}
+                onChange={(e) => setForm((f) => ({ ...f, condition: e.target.value as EquipmentCondition }))}
+                className={inputCls}
+              >
+                {CONDITIONS.map((c) => (
+                  <option key={c.value} value={c.value}>{c.label}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {/* Total + Available Quantity */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className={labelCls}>Total Quantity <span className="text-red-500">*</span></label>
+              <input
+                type="number"
+                min={1}
+                value={form.total_quantity}
+                onChange={(e) => setForm((f) => ({ ...f, total_quantity: parseInt(e.target.value) || 1 }))}
+                className={inputCls}
+                required
+              />
+            </div>
+            <div>
+              <label className={labelCls}>Available Quantity <span className="text-red-500">*</span></label>
+              <input
+                type="number"
+                min={0}
+                value={form.available_quantity}
+                onChange={(e) => setForm((f) => ({ ...f, available_quantity: parseInt(e.target.value) || 0 }))}
+                className={inputCls}
+                required
+              />
+            </div>
+          </div>
+
+          {/* Storage Location */}
+          <div>
+            <label className={labelCls}>Storage Location</label>
+            <input
+              type="text"
+              value={form.storage_location}
+              onChange={(e) => setForm((f) => ({ ...f, storage_location: e.target.value }))}
+              placeholder="e.g. Equipment Room A"
+              className={inputCls}
+            />
+          </div>
+
+          {/* Sport / Art */}
+          <div>
+            <label className={labelCls}>Sport / Art</label>
+            <AutocompleteInput
+              value={form.sport_or_art}
+              onChange={(v) => setForm((f) => ({ ...f, sport_or_art: v }))}
+              suggestions={SPORT_SUGGESTIONS}
+              placeholder="e.g. Basketball, Dance"
+              inputCls={inputCls}
+            />
+          </div>
+
+          {/* Description */}
+          <div>
+            <label className={labelCls}>Description</label>
+            <textarea
+              value={form.description}
+              onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
+              placeholder="Optional notes about this equipment"
+              rows={2}
+              className={`${inputCls} resize-none`}
+            />
+          </div>
+
+          {/* Active toggle */}
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => setForm((f) => ({ ...f, is_active: !f.is_active }))}
+              className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
+                form.is_active ? "bg-green-500" : "bg-gray-300"
+              }`}
+            >
+              <span
+                className={`inline-block h-3.5 w-3.5 rounded-full bg-white shadow transition-transform ${
+                  form.is_active ? "translate-x-4" : "translate-x-1"
+                }`}
+              />
+            </button>
+            <span className="text-sm text-gray-700">
+              {form.is_active ? "Active" : "Inactive (hidden from borrowing)"}
+            </span>
+          </div>
+
+          {error && (
+            <p className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg">{error}</p>
+          )}
+
+          <div className="flex justify-end gap-2 pt-1">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 text-sm border rounded-lg hover:bg-gray-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={mutation.isPending}
+              className="flex items-center gap-2 px-4 py-2 text-sm bg-[#1E3A5F] text-white rounded-lg hover:bg-[#16304f] disabled:opacity-60"
+            >
+              {mutation.isPending ? <><Loader2 size={14} className="animate-spin" /> Saving...</> : "Save Changes"}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 // ── Main Inventory Page ──────────────────────────────────────────────────────
 
 export default function InventoryPage() {
@@ -285,6 +582,7 @@ export default function InventoryPage() {
   const [page, setPage] = useState(1);
   const [qrViewEquipment, setQrViewEquipment] = useState<Equipment | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [editEquipment, setEditEquipment] = useState<Equipment | null>(null);
   const { isServerReachable } = useNetworkStatus();
   const invalidateInventory = useInvalidateInventory();
 
@@ -319,6 +617,13 @@ export default function InventoryPage() {
       {showAddModal && (
         <AddEquipmentModal
           onClose={() => setShowAddModal(false)}
+          onSuccess={invalidateInventory}
+        />
+      )}
+      {editEquipment && (
+        <EditEquipmentModal
+          equipment={editEquipment}
+          onClose={() => setEditEquipment(null)}
           onSuccess={invalidateInventory}
         />
       )}
@@ -389,18 +694,19 @@ export default function InventoryPage() {
                 <th className="px-4 py-3 text-center font-medium">Total</th>
                 <th className="px-4 py-3 text-center font-medium">Available</th>
                 <th className="px-4 py-3 text-left font-medium">Location</th>
+                {isAdmin && <th className="px-4 py-3 text-center font-medium">Actions</th>}
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
               {isLoading ? (
                 <tr>
-                  <td colSpan={7} className="px-4 py-8 text-center text-gray-400">
+                  <td colSpan={isAdmin ? 8 : 7} className="px-4 py-8 text-center text-gray-400">
                     Loading...
                   </td>
                 </tr>
               ) : (data?.items ?? []).length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-4 py-8 text-center text-gray-400">
+                  <td colSpan={isAdmin ? 8 : 7} className="px-4 py-8 text-center text-gray-400">
                     No equipment found
                   </td>
                 </tr>
@@ -449,6 +755,17 @@ export default function InventoryPage() {
                     <td className="px-4 py-3 text-gray-500 text-xs">
                       {eq.storage_location ?? "—"}
                     </td>
+                    {isAdmin && (
+                      <td className="px-4 py-3 text-center">
+                        <button
+                          onClick={() => setEditEquipment(eq)}
+                          className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-[#1E3A5F] transition"
+                          title="Edit equipment"
+                        >
+                          <Pencil size={14} />
+                        </button>
+                      </td>
+                    )}
                   </tr>
                 ))
               )}
