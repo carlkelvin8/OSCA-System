@@ -1,12 +1,12 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { inventoryApi, reportsApi } from "@/lib/api";
 import { useAuthStore } from "@/store/useAuthStore";
 import { Package, Download, Plus, Search, QrCode, X, Printer, WifiOff, Loader2, Pencil } from "lucide-react";
 import { useNetworkStatus } from "@/hooks/useNetworkStatus";
-import { useInventoryList, useInvalidateInventory } from "@/hooks/useInventoryData";
+import { useInventoryList, useInvalidateInventory, useEquipmentByBarcode } from "@/hooks/useInventoryData";
 import type { Equipment, EquipmentCategory, EquipmentCondition } from "@/types";
 import QRCode from "qrcode";
 
@@ -588,6 +588,44 @@ export default function InventoryPage() {
 
   const { data, isLoading } = useInventoryList(page, search);
 
+  // ── Handheld barcode/QR scanner support ──────────────────────────────────
+  // Scanners are keyboard-wedge devices: they type the code into whichever
+  // field has focus, then send Enter. The search box already does a live
+  // fuzzy match against name/qr_code; Enter additionally triggers an exact
+  // lookup so a scan jumps straight to the matched item.
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const [scannedCode, setScannedCode] = useState<string | null>(null);
+  const [scanError, setScanError] = useState<string | null>(null);
+  const {
+    data: scannedEquipment,
+    isError: scanNotFound,
+    isFetching: scanLookupLoading,
+  } = useEquipmentByBarcode(scannedCode);
+
+  useEffect(() => {
+    searchInputRef.current?.focus();
+  }, []);
+
+  useEffect(() => {
+    if (!scannedCode) return;
+    if (scannedEquipment) {
+      setQrViewEquipment(scannedEquipment);
+      setSearch("");
+      setScannedCode(null);
+      searchInputRef.current?.focus();
+    } else if (scanNotFound) {
+      setScanError(`No equipment found for code "${scannedCode}".`);
+      setScannedCode(null);
+      searchInputRef.current?.focus();
+    }
+  }, [scannedCode, scannedEquipment, scanNotFound]);
+
+  useEffect(() => {
+    if (!scanError) return;
+    const timer = setTimeout(() => setScanError(null), 4000);
+    return () => clearTimeout(timer);
+  }, [scanError]);
+
   const downloadReport = async (format: "pdf" | "xlsx") => {
     const res =
       format === "pdf"
@@ -612,7 +650,13 @@ export default function InventoryPage() {
   return (
     <>
       {qrViewEquipment && (
-        <QRViewModal equipment={qrViewEquipment} onClose={() => setQrViewEquipment(null)} />
+        <QRViewModal
+          equipment={qrViewEquipment}
+          onClose={() => {
+            setQrViewEquipment(null);
+            searchInputRef.current?.focus();
+          }}
+        />
       )}
       {showAddModal && (
         <AddEquipmentModal
@@ -674,13 +718,30 @@ export default function InventoryPage() {
         <div className="relative">
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
           <input
+            ref={searchInputRef}
             type="text"
             value={search}
             onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-            placeholder="Search equipment name or QR code..."
-            className="w-full border rounded-lg pl-9 pr-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#1E3A5F]"
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && search.trim()) {
+                e.preventDefault();
+                setScanError(null);
+                setScannedCode(search.trim());
+              }
+            }}
+            placeholder="Search equipment name or QR code... (or scan a barcode)"
+            className="w-full border rounded-lg pl-9 pr-9 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#1E3A5F]"
           />
+          {scanLookupLoading && (
+            <Loader2 size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 animate-spin" />
+          )}
         </div>
+
+        {scanError && (
+          <p className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">
+            {scanError}
+          </p>
+        )}
 
         {/* Table */}
         <div className="bg-white rounded-xl shadow-sm overflow-hidden">
