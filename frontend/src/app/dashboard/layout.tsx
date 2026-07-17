@@ -22,6 +22,10 @@ import {
   Bell,
   ScanFace,
   UserCircle,
+  Building2,
+  ShieldCheck,
+  AlertTriangle,
+  Gavel,
 } from "lucide-react";
 import { useAuthStore } from "@/store/useAuthStore";
 import { OfflineBanner } from "@/components/ui/OfflineBanner";
@@ -93,6 +97,30 @@ const navItems: NavItem[] = [
       label: "Reports",
       icon: BarChart3,
       roles: ["admin", "director", "coach"],
+    },
+    {
+      href: "/dashboard/facilities",
+      label: "Facilities",
+      icon: Building2,
+      roles: ["admin", "director", "coach", "staff"],
+    },
+    {
+      href: "/dashboard/eligibility",
+      label: "Eligibility",
+      icon: ShieldCheck,
+      roles: ["admin", "director", "coach", "student"],
+    },
+    {
+      href: "/dashboard/incidents",
+      label: "Incidents",
+      icon: AlertTriangle,
+      roles: ["admin", "director", "coach", "staff"],
+    },
+    {
+      href: "/dashboard/sanctions",
+      label: "Sanctions",
+      icon: Gavel,
+      roles: ["admin", "director", "coach", "student"],
     },
     {
       href: "/kiosk",

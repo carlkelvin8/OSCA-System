@@ -280,3 +280,129 @@ export interface MonthlyInventoryReport {
   condition_breakdown: Record<string, number>;
   generated_at: string;
 }
+
+
+// ── Facilities ────────────────────────────────────────────────────────────────
+
+export type FacilityStatus = "available" | "in_use" | "maintenance" | "closed";
+export type FacilityConditionType = "excellent" | "good" | "fair" | "poor" | "needs_repair";
+
+export interface Facility {
+  id: string;
+  name: string;
+  description: string | null;
+  location: string | null;
+  capacity: number | null;
+  status: FacilityStatus;
+  condition: FacilityConditionType;
+  is_active: boolean;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface FacilitySchedule {
+  id: string;
+  facility_id: string;
+  title: string;
+  scheduled_date: string;
+  start_time: string;
+  end_time: string;
+  booked_by_id: string | null;
+  sport_or_activity: string | null;
+  notes: string | null;
+  created_at: string;
+}
+
+// ── Eligibility ───────────────────────────────────────────────────────────────
+
+export type EligibilityStatus = "eligible" | "restricted" | "ineligible" | "pending_clearance";
+export type EligibilityReasonType = "injury" | "medical" | "disciplinary" | "academic" | "other";
+
+export interface AthleteEligibility {
+  id: string;
+  student_id: string;
+  status: EligibilityStatus;
+  reason_type: EligibilityReasonType | null;
+  reason_detail: string | null;
+  start_date: string;
+  end_date: string | null;
+  medical_clearance: boolean;
+  cleared_by_id: string | null;
+  cleared_at: string | null;
+  notes: string | null;
+  is_current: boolean;
+  created_by_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+// ── Incidents ─────────────────────────────────────────────────────────────────
+
+export type IncidentCategory = "injury" | "equipment_damage" | "facility_damage" | "behavioral" | "safety" | "other";
+export type IncidentSeverity = "low" | "medium" | "high" | "critical";
+export type IncidentStatus = "open" | "under_review" | "resolved" | "closed";
+
+export interface Incident {
+  id: string;
+  title: string;
+  description: string;
+  category: IncidentCategory;
+  severity: IncidentSeverity;
+  status: IncidentStatus;
+  incident_date: string;
+  location: string | null;
+  reported_by_id: string;
+  involved_student_id: string | null;
+  involved_facility_id: string | null;
+  resolution: string | null;
+  resolved_by_id: string | null;
+  resolved_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+// ── Sanctions ─────────────────────────────────────────────────────────────────
+
+export type ViolationType = "tardiness" | "absence" | "misconduct" | "dress_code" | "equipment_misuse" | "unsportsmanlike" | "substance" | "academic" | "other";
+export type SanctionSeverity = "warning" | "minor" | "major" | "severe";
+export type SanctionStatus = "active" | "served" | "appealed" | "lifted";
+
+export interface Sanction {
+  id: string;
+  student_id: string;
+  issued_by_id: string;
+  violation_type: ViolationType;
+  severity: SanctionSeverity;
+  status: SanctionStatus;
+  description: string;
+  violation_date: string;
+  start_date: string;
+  end_date: string | null;
+  penalty: string | null;
+  is_compliant: boolean;
+  compliance_notes: string | null;
+  acknowledged_by_student: boolean;
+  acknowledged_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+// ── Offline Sync ──────────────────────────────────────────────────────────────
+
+export type SyncStatus = "pending" | "synced" | "conflict" | "failed";
+export type SyncRecordType = "attendance" | "inventory_transaction";
+
+export interface SyncRecord {
+  id: string;
+  device_id: string;
+  user_id: string;
+  record_type: SyncRecordType;
+  payload: Record<string, unknown>;
+  local_timestamp: string;
+  status: SyncStatus;
+  sync_attempts: number;
+  error_message: string | null;
+  synced_at: string | null;
+  created_at: string;
+}

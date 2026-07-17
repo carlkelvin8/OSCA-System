@@ -1,0 +1,86 @@
+"""Incident reporting endpoints."""
+import uuid
+from datetime import datetime, UTC
+from typing import Annotated
+
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import select, func
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.core.dependencies import AdminOrCoach, CurrentUser, get_db
+from app.models.incident import Incident, IncidentStatus
+from app.models.user import UserRole
+from app.schemas.incident import IncidentCreate, IncidentUpdate, IncidentRead
+from app.schemas.common import PaginatedResponse
+
+router = APIRouter()
+
+
+@router.get("", response_model=PaginatedResponse[IncidentRead], summary="List incidents")
+async def list_incidents(
+    current_user: CurrentUser,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    status_filter: str | None = None,
+    category: str | None = None,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=100),
+):
+    query = select(Incident)
+
+    # Students can only see incidents involving them
+    if current_user.role == UserRole.STUDENT:
+        query = query.where(Incident.involved_student_id == current_user.id)
+
+    if status_filter:
+        query = query.where(Incident.status == status_filter)
+    if category:
+        query = query.where(Incident.category == category)
+
+    count_q = select(func.count()).select_from(query.subquery())
+    total = (await db.execute(count_q)).scalar() or 0
+
+    query = query.order_by(Incident.created_at.desc()).offset((page - 1) * page_size).limit(page_size)
+    result = await db.execute(query)
+    items = [IncidentRead.model_validate(r) for r in result.scalars().all()]
+
+    return PaginatedResponse(items=items, total=total, page=page, page_size=page_size)
+
+
+@router.post("", response_model=IncidentRead, status_code=status.HTTP_201_CREATED, summary="Report incident")
+async def create_incident(
+    body: IncidentCreate,
+    user: AdminOrCoach,
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    incident = Incident(**body.model_dump(), reported_by_id=user.id)
+    db.add(incident)
+    await db.flush()
+    await db.refresh(incident)
+    return IncidentRead.model_validate(incident)
+
+
+@router.patch("/{incident_id}", response_model=IncidentRead, summary="Update/resolve incident")
+async def update_incident(
+    incident_id: uuid.UUID,
+    body: IncidentUpdate,
+    user: AdminOrCoach,
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    result = await db.execute(select(Incident).where(Incident.id == incident_id))
+    incident = result.scalar_one_or_none()
+    if not incident:
+        raise HTTPException(status_code=404, detail="Incident not found")
+
+    updates = body.model_dump(exclude_unset=True)
+
+    # Auto-set resolved fields
+    if updates.get("status") == IncidentStatus.RESOLVED and incident.status != IncidentStatus.RESOLVED:
+        incident.resolved_by_id = user.id
+        incident.resolved_at = datetime.now(UTC)
+
+    for k, v in updates.items():
+        setattr(incident, k, v)
+
+    await db.flush()
+    await db.refresh(incident)
+    return IncidentRead.model_validate(incident)

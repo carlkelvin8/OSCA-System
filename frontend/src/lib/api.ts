@@ -212,3 +212,65 @@ export const adminApi = {
   getFRConfig: () => api.get("/admin/fr-config"),
   updateFRConfig: (data: Record<string, unknown>) => api.put("/admin/fr-config", data),
 };
+
+
+// ── Facilities ────────────────────────────────────────────────────────────────
+
+export const facilitiesApi = {
+  list: (params?: Record<string, string | number | boolean>) =>
+    api.get("/facilities", { params }),
+  create: (data: Record<string, unknown>) =>
+    api.post("/facilities", data),
+  update: (id: string, data: Record<string, unknown>) =>
+    api.patch(`/facilities/${id}`, data),
+  listSchedules: (params?: Record<string, string | number | boolean>) =>
+    api.get("/facilities/schedules", { params }),
+  createSchedule: (data: Record<string, unknown>) =>
+    api.post("/facilities/schedules", data),
+};
+
+// ── Eligibility ───────────────────────────────────────────────────────────────
+
+export const eligibilityApi = {
+  list: (params?: Record<string, string | number | boolean>) =>
+    api.get("/eligibility", { params }),
+  create: (data: Record<string, unknown>) =>
+    api.post("/eligibility", data),
+  update: (id: string, data: Record<string, unknown>) =>
+    api.patch(`/eligibility/${id}`, data),
+};
+
+// ── Incidents ─────────────────────────────────────────────────────────────────
+
+export const incidentsApi = {
+  list: (params?: Record<string, string | number | boolean>) =>
+    api.get("/incidents", { params }),
+  create: (data: Record<string, unknown>) =>
+    api.post("/incidents", data),
+  update: (id: string, data: Record<string, unknown>) =>
+    api.patch(`/incidents/${id}`, data),
+};
+
+// ── Sanctions ─────────────────────────────────────────────────────────────────
+
+export const sanctionsApi = {
+  list: (params?: Record<string, string | number | boolean>) =>
+    api.get("/sanctions", { params }),
+  create: (data: Record<string, unknown>) =>
+    api.post("/sanctions", data),
+  update: (id: string, data: Record<string, unknown>) =>
+    api.patch(`/sanctions/${id}`, data),
+  acknowledge: (id: string) =>
+    api.post(`/sanctions/${id}/acknowledge`),
+};
+
+// ── Offline Sync ──────────────────────────────────────────────────────────────
+
+export const syncApi = {
+  upload: (data: Record<string, unknown>) =>
+    api.post("/sync/upload", data),
+  status: (params?: Record<string, string>) =>
+    api.get("/sync/status", { params }),
+  retry: (id: string) =>
+    api.post(`/sync/retry/${id}`),
+};
