@@ -393,9 +393,9 @@ class ReportService:
         </body></html>"""
 
     def _html_to_pdf(self, html: str) -> bytes:
-        from weasyprint import HTML
+        from xhtml2pdf import pisa
         buffer = io.BytesIO()
-        HTML(string=html).write_pdf(buffer)
+        pisa.CreatePDF(io.StringIO(html), dest=buffer)
         return buffer.getvalue()
 
     def _build_attendance_xlsx(self, records: list[dict]) -> bytes:

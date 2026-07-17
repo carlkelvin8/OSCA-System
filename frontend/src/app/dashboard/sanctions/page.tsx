@@ -2,10 +2,10 @@
 
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { sanctionsApi } from "@/lib/api";
+import { sanctionsApi, usersApi } from "@/lib/api";
 import { useAuthStore } from "@/store/useAuthStore";
 import { Gavel, Plus, X, Loader2, CheckCircle } from "lucide-react";
-import type { Sanction, PaginatedResponse } from "@/types";
+import type { Sanction, PaginatedResponse, UserSummary } from "@/types";
 import { format } from "date-fns";
 
 const SEVERITY_COLORS: Record<string, string> = {
@@ -28,6 +28,13 @@ export default function SanctionsPage() {
   const isStudent = user?.role === "student";
   const queryClient = useQueryClient();
   const [showAdd, setShowAdd] = useState(false);
+
+  // Fetch students for dropdown
+  const { data: studentsData } = useQuery<PaginatedResponse<UserSummary>>({
+    queryKey: ["students-list"],
+    queryFn: async () => (await usersApi.list({ role: "student", page_size: 100, is_active: true })).data,
+    enabled: isCoachOrAdmin,
+  });
 
   const { data, isLoading } = useQuery<PaginatedResponse<Sanction>>({
     queryKey: ["sanctions"],
@@ -147,7 +154,12 @@ export default function SanctionsPage() {
               <button onClick={() => setShowAdd(false)}><X size={18} /></button>
             </div>
             <form onSubmit={(e) => { e.preventDefault(); createMutation.mutate({ ...form, end_date: form.end_date || null, penalty: form.penalty || null }); }} className="space-y-3">
-              <input placeholder="Student ID (UUID) *" required value={form.student_id} onChange={(e) => setForm({ ...form, student_id: e.target.value })} className="w-full px-3 py-2 text-sm border rounded-lg" />
+              <select required value={form.student_id} onChange={(e) => setForm({ ...form, student_id: e.target.value })} className="w-full px-3 py-2 text-sm border rounded-lg">
+                <option value="">-- Select Student --</option>
+                {studentsData?.items.map((s) => (
+                  <option key={s.id} value={s.id}>{s.full_name} ({s.email})</option>
+                ))}
+              </select>
               <select value={form.violation_type} onChange={(e) => setForm({ ...form, violation_type: e.target.value })} className="w-full px-3 py-2 text-sm border rounded-lg">
                 <option value="tardiness">Tardiness</option>
                 <option value="absence">Absence</option>

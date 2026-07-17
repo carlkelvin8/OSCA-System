@@ -2,10 +2,10 @@
 
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { incidentsApi } from "@/lib/api";
+import { incidentsApi, usersApi } from "@/lib/api";
 import { useAuthStore } from "@/store/useAuthStore";
 import { AlertTriangle, Plus, X, Loader2 } from "lucide-react";
-import type { Incident, PaginatedResponse } from "@/types";
+import type { Incident, PaginatedResponse, UserSummary } from "@/types";
 import { format } from "date-fns";
 
 const SEVERITY_COLORS: Record<string, string> = {
@@ -27,6 +27,13 @@ export default function IncidentsPage() {
   const isStaff = role === "admin" || role === "director" || role === "coach" || role === "staff";
   const queryClient = useQueryClient();
   const [showAdd, setShowAdd] = useState(false);
+
+  // Fetch students for dropdown
+  const { data: studentsData } = useQuery<PaginatedResponse<UserSummary>>({
+    queryKey: ["students-list"],
+    queryFn: async () => (await usersApi.list({ role: "student", page_size: 100, is_active: true })).data,
+    enabled: isStaff,
+  });
 
   const { data, isLoading } = useQuery<PaginatedResponse<Incident>>({
     queryKey: ["incidents"],
@@ -136,7 +143,12 @@ export default function IncidentsPage() {
               </select>
               <input type="datetime-local" required value={form.incident_date} onChange={(e) => setForm({ ...form, incident_date: e.target.value })} className="w-full px-3 py-2 text-sm border rounded-lg" />
               <input placeholder="Location" value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} className="w-full px-3 py-2 text-sm border rounded-lg" />
-              <input placeholder="Involved Student ID (optional)" value={form.involved_student_id} onChange={(e) => setForm({ ...form, involved_student_id: e.target.value })} className="w-full px-3 py-2 text-sm border rounded-lg" />
+              <select value={form.involved_student_id} onChange={(e) => setForm({ ...form, involved_student_id: e.target.value })} className="w-full px-3 py-2 text-sm border rounded-lg">
+                <option value="">-- Involved Student (optional) --</option>
+                {studentsData?.items.map((s) => (
+                  <option key={s.id} value={s.id}>{s.full_name} ({s.email})</option>
+                ))}
+              </select>
               <button type="submit" disabled={createMutation.isPending} className="w-full py-2 bg-[#1E3A5F] text-white rounded-lg text-sm font-medium disabled:opacity-50">
                 {createMutation.isPending ? "Submitting..." : "Submit Report"}
               </button>

@@ -2,10 +2,10 @@
 
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { eligibilityApi } from "@/lib/api";
+import { eligibilityApi, usersApi } from "@/lib/api";
 import { useAuthStore } from "@/store/useAuthStore";
 import { ShieldCheck, Plus, X, Loader2 } from "lucide-react";
-import type { AthleteEligibility, PaginatedResponse } from "@/types";
+import type { AthleteEligibility, PaginatedResponse, UserSummary } from "@/types";
 import { format } from "date-fns";
 
 const STATUS_COLORS: Record<string, string> = {
@@ -37,6 +37,13 @@ export default function EligibilityPage() {
   });
 
   const [form, setForm] = useState({ student_id: "", status: "restricted", reason_type: "injury", reason_detail: "", start_date: "", end_date: "", notes: "" });
+
+  // Fetch students for dropdown
+  const { data: studentsData } = useQuery<PaginatedResponse<UserSummary>>({
+    queryKey: ["students-list"],
+    queryFn: async () => (await usersApi.list({ role: "student", page_size: 100, is_active: true })).data,
+    enabled: isStaff,
+  });
 
   return (
     <div>
@@ -121,7 +128,12 @@ export default function EligibilityPage() {
               <button onClick={() => setShowAdd(false)}><X size={18} /></button>
             </div>
             <form onSubmit={(e) => { e.preventDefault(); createMutation.mutate(form); }} className="space-y-3">
-              <input placeholder="Student ID (UUID) *" required value={form.student_id} onChange={(e) => setForm({ ...form, student_id: e.target.value })} className="w-full px-3 py-2 text-sm border rounded-lg" />
+              <select required value={form.student_id} onChange={(e) => setForm({ ...form, student_id: e.target.value })} className="w-full px-3 py-2 text-sm border rounded-lg">
+                <option value="">-- Select Student --</option>
+                {studentsData?.items.map((s) => (
+                  <option key={s.id} value={s.id}>{s.full_name} ({s.email})</option>
+                ))}
+              </select>
               <select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })} className="w-full px-3 py-2 text-sm border rounded-lg">
                 <option value="eligible">Eligible</option>
                 <option value="restricted">Restricted</option>

@@ -125,20 +125,20 @@ function Field({
 }) {
   return (
     <div>
-      <label className="block text-sm font-medium text-[#374151] mb-1">
+      <label className="block text-xs font-medium text-white/60 mb-1.5 uppercase tracking-wider">
         {label}
-        {required && <span className="text-red-500 ml-0.5">*</span>}
+        {required && <span className="text-red-400 ml-0.5">*</span>}
       </label>
       {children}
-      {error && <p className="text-red-500 text-xs mt-1">{error}</p>}
+      {error && <p className="text-red-400 text-xs mt-1.5">{error}</p>}
     </div>
   );
 }
 
 const inputCls =
-  "w-full border border-[#d1d5db] rounded-lg px-3 py-2.5 text-sm text-[#111827] " +
-  "focus:outline-none focus:ring-2 focus:ring-[#2563eb] focus:border-transparent " +
-  "placeholder:text-[#9ca3af]";
+  "w-full bg-white/[0.04] border border-white/[0.08] rounded-xl px-4 py-3 text-sm text-white " +
+  "focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:border-violet-500/50 " +
+  "placeholder:text-white/25 transition-all";
 
 // ── Component ──────────────────────────────────────────────────────────────────
 
@@ -264,19 +264,23 @@ export default function RegisterPage() {
   // ── Success screen ───────────────────────────────────────────────────────────
   if (submitted) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[#0f172a]">
-        <div className="bg-white rounded-2xl shadow-xl p-10 w-full max-w-md text-center">
-          <CheckCircle2 size={52} className="text-[#2563eb] mx-auto mb-4" />
-          <h2 className="text-2xl font-bold text-[#111827] mb-2">Registration Complete</h2>
-          <p className="text-sm text-[#6b7280] mb-1">
+      <div className="min-h-screen flex items-center justify-center relative overflow-hidden bg-[#030014]">
+        <div className="absolute inset-0">
+          <div className="absolute -top-[40%] -left-[20%] w-[70vw] h-[70vw] rounded-full opacity-20 animate-pulse" style={{ background: "radial-gradient(circle, #4f46e5, transparent 70%)", filter: "blur(80px)" }} />
+          <div className="absolute top-[30%] -right-[15%] w-[50vw] h-[50vw] rounded-full opacity-15 animate-pulse" style={{ background: "radial-gradient(circle, #7c3aed, transparent 70%)", filter: "blur(80px)" }} />
+        </div>
+        <div className="relative z-10 bg-white/[0.03] backdrop-blur-xl border border-white/[0.08] rounded-3xl p-10 w-full max-w-md text-center shadow-[0_8px_60px_rgba(0,0,0,0.4)]">
+          <CheckCircle2 size={52} className="text-green-400 mx-auto mb-4" />
+          <h2 className="text-2xl font-bold text-white mb-2">Registration Complete</h2>
+          <p className="text-sm text-white/50 mb-1">
             Your account has been created and your face has been enrolled.
           </p>
-          <p className="text-sm text-[#6b7280] mb-6">
-            Your account is pending Admin approval. You will be notified once it is activated.
+          <p className="text-sm text-white/50 mb-6">
+            You can now sign in with your credentials.
           </p>
           <Link
             href="/login"
-            className="inline-block bg-[#2563eb] hover:bg-[#1d4ed8] text-white text-sm font-semibold py-2.5 px-6 rounded-lg transition"
+            className="inline-flex items-center gap-2 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white text-sm font-semibold py-3 px-6 rounded-xl transition shadow-lg shadow-violet-600/25"
           >
             Back to Sign In
           </Link>
@@ -286,17 +290,24 @@ export default function RegisterPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[#0f172a] py-10">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg mx-4">
+    <div className="min-h-screen flex items-center justify-center relative overflow-hidden bg-[#030014] py-10">
+      {/* Animated background */}
+      <div className="absolute inset-0">
+        <div className="absolute -top-[40%] -left-[20%] w-[70vw] h-[70vw] rounded-full opacity-20 animate-pulse" style={{ background: "radial-gradient(circle, #4f46e5, transparent 70%)", filter: "blur(80px)" }} />
+        <div className="absolute top-[30%] -right-[15%] w-[50vw] h-[50vw] rounded-full opacity-15 animate-pulse" style={{ background: "radial-gradient(circle, #7c3aed, transparent 70%)", filter: "blur(80px)" }} />
+        <div className="absolute -bottom-[20%] left-[30%] w-[45vw] h-[45vw] rounded-full opacity-20 animate-pulse" style={{ background: "radial-gradient(circle, #06b6d4, transparent 70%)", filter: "blur(80px)" }} />
+      </div>
+
+      <div className="relative z-10 bg-white/[0.03] backdrop-blur-xl border border-white/[0.08] rounded-3xl shadow-[0_8px_60px_rgba(0,0,0,0.4)] w-full max-w-lg mx-4">
         {/* Header */}
-        <div className="px-8 pt-8 pb-6 border-b border-[#f3f4f6]">
+        <div className="px-8 pt-8 pb-6 border-b border-white/[0.06]">
           <div className="flex items-center gap-3 mb-1">
-            <div className="w-9 h-9 rounded-lg bg-[#2563eb] flex items-center justify-center text-white font-bold text-lg">
+            <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-violet-600 to-indigo-600 flex items-center justify-center text-white font-bold text-lg shadow-lg shadow-violet-500/25">
               O
             </div>
             <div>
-              <h1 className="text-lg font-bold text-[#111827] leading-tight">OSCA System</h1>
-              <p className="text-xs text-[#6b7280]">NAAP-Villamor · User Registration</p>
+              <h1 className="text-lg font-bold text-white leading-tight">OSCA System</h1>
+              <p className="text-xs text-white/40">NAAP-Villamor · User Registration</p>
             </div>
           </div>
 
@@ -306,23 +317,23 @@ export default function RegisterPage() {
               <div key={i} className="flex items-center gap-1 flex-1">
                 <div
                   className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold shrink-0 transition ${i < step
-                      ? "bg-[#2563eb] text-white"
+                      ? "bg-violet-600 text-white"
                       : i === step
-                        ? "border-2 border-[#2563eb] text-[#2563eb]"
-                        : "border-2 border-[#d1d5db] text-[#9ca3af]"
+                        ? "border-2 border-violet-500 text-violet-400"
+                        : "border-2 border-white/10 text-white/30"
                     }`}
                 >
                   {i < step ? "✓" : i + 1}
                 </div>
                 <span
-                  className={`text-[10px] font-medium hidden sm:block leading-tight ${i === step ? "text-[#2563eb]" : "text-[#9ca3af]"
+                  className={`text-[10px] font-medium hidden sm:block leading-tight ${i === step ? "text-violet-400" : "text-white/30"
                     }`}
                 >
                   {label}
                 </span>
                 {i < STEPS.length - 1 && (
                   <div
-                    className={`h-px flex-1 ${i < step ? "bg-[#2563eb]" : "bg-[#e5e7eb]"}`}
+                    className={`h-px flex-1 ${i < step ? "bg-violet-600" : "bg-white/[0.08]"}`}
                   />
                 )}
               </div>
@@ -334,7 +345,7 @@ export default function RegisterPage() {
           {/* ── STEP 0: Account ────────────────────────────────────────────── */}
           {step === 0 && (
             <>
-              <p className="text-sm font-semibold text-[#111827]">Account Credentials</p>
+              <p className="text-sm font-semibold text-white">Account Credentials</p>
 
               <Field label="Role" error={errors.role?.message} required>
                 <select {...register("role")} className={inputCls}>
@@ -379,7 +390,7 @@ export default function RegisterPage() {
           {/* ── STEP 1: Profile ────────────────────────────────────────────── */}
           {step === 1 && (
             <>
-              <p className="text-sm font-semibold text-[#111827]">
+              <p className="text-sm font-semibold text-white">
                 {selectedRole === "student" ? "Student Profile" : "User Profile"}
               </p>
               <div className="grid grid-cols-2 gap-3">
@@ -467,7 +478,7 @@ export default function RegisterPage() {
           {/* ── STEP 2: Emergency & Consent ────────────────────────────────── */}
           {step === 2 && (
             <>
-              <p className="text-sm font-semibold text-[#111827]">Emergency Contact</p>
+              <p className="text-sm font-semibold text-white">Emergency Contact</p>
               <Field
                 label="Contact Name"
                 error={errors.emergency_contact_name?.message}
@@ -500,7 +511,7 @@ export default function RegisterPage() {
                     Biometric Data Consent — R.A. 10173 (Data Privacy Act of 2012)
                   </p>
                 </div>
-                <p className="text-xs text-[#374151] leading-relaxed mb-3">
+                <p className="text-xs text-white/70 leading-relaxed mb-3">
                   I hereby give my explicit consent to the National Aviation Academy of the
                   Philippines (NAAP–Villamor) and the Office of Sports and Cultural Affairs (OSCA)
                   to collect, store, and process my facial biometric data solely for attendance
@@ -515,7 +526,7 @@ export default function RegisterPage() {
                     type="checkbox"
                     className="mt-0.5 w-4 h-4 accent-[#2563eb]"
                   />
-                  <span className="text-xs text-[#111827] font-medium">
+                  <span className="text-xs text-white font-medium">
                     I have read and I agree to the biometric data consent above.
                     <span className="text-red-500 ml-0.5">*</span>
                   </span>
@@ -535,7 +546,7 @@ export default function RegisterPage() {
               {/* Instructions */}
               <div className="flex items-start gap-2 bg-[#f0f4ff] border border-[#bfdbfe] rounded-xl p-3">
                 <Camera size={16} className="text-[#2563eb] mt-0.5 shrink-0" />
-                <p className="text-xs text-[#374151] leading-relaxed">
+                <p className="text-xs text-white/70 leading-relaxed">
                   Capture <strong>{CAPTURE_COUNT} photos</strong> at different angles (front, left,
                   right, slight up, slight down). Ensure good lighting. Liveness detection will be
                   applied during recognition.
@@ -570,7 +581,7 @@ export default function RegisterPage() {
                     >
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img src={src} alt={`Capture ${i + 1}`} className="w-full h-full object-cover" />
-                      <span className="absolute bottom-0 right-0 bg-[#2563eb] text-white text-[9px] font-bold w-4 h-4 flex items-center justify-center rounded-tl">
+                      <span className="absolute bottom-0 right-0 bg-violet-600 text-white text-[9px] font-bold w-4 h-4 flex items-center justify-center rounded-tl">
                         {i + 1}
                       </span>
                     </div>
@@ -593,7 +604,7 @@ export default function RegisterPage() {
                   <button
                     type="button"
                     onClick={resetCaptures}
-                    className="flex items-center gap-1.5 border border-[#d1d5db] text-[#374151] text-sm font-medium px-4 py-2.5 rounded-lg hover:bg-[#f9fafb] transition"
+                    className="flex items-center gap-1.5 border border-white/10 text-white/70 text-sm font-medium px-4 py-2.5 rounded-lg hover:bg-white/5 transition"
                   >
                     <RotateCcw size={14} /> Retake
                   </button>
@@ -610,7 +621,7 @@ export default function RegisterPage() {
 
           {/* Show API errors for non-face steps too */}
           {step < 3 && apiError && (
-            <div className="bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3 rounded-lg">
+            <div className="bg-red-500/10 border border-red-500/20 text-red-300 text-sm px-4 py-3 rounded-xl">
               {apiError}
             </div>
           )}
@@ -621,7 +632,7 @@ export default function RegisterPage() {
               <button
                 type="button"
                 onClick={() => setStep((s) => s - 1)}
-                className="flex items-center gap-1 border border-[#d1d5db] text-[#374151] text-sm font-medium px-4 py-2.5 rounded-lg hover:bg-[#f9fafb] transition"
+                className="flex items-center gap-1 border border-white/10 text-white/70 text-sm font-medium px-4 py-2.5 rounded-xl hover:bg-white/5 transition"
               >
                 <ChevronLeft size={16} /> Back
               </button>
@@ -630,7 +641,7 @@ export default function RegisterPage() {
               <button
                 type="button"
                 onClick={advance}
-                className="flex-1 flex items-center justify-center gap-1 bg-[#2563eb] hover:bg-[#1d4ed8] text-white text-sm font-semibold py-2.5 rounded-lg transition"
+                className="flex-1 flex items-center justify-center gap-1 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white text-sm font-semibold py-2.5 rounded-xl transition shadow-lg shadow-violet-600/25"
               >
                 Continue <ChevronRight size={16} />
               </button>
@@ -638,7 +649,7 @@ export default function RegisterPage() {
               <button
                 type="submit"
                 disabled={isSubmitting || enrolling || captures.length < CAPTURE_COUNT}
-                className="flex-1 bg-[#2563eb] hover:bg-[#1d4ed8] text-white text-sm font-semibold py-2.5 rounded-lg transition disabled:opacity-60"
+                className="flex-1 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white text-sm font-semibold py-2.5 rounded-xl transition shadow-lg shadow-violet-600/25 disabled:opacity-50"
               >
                 {isSubmitting || enrolling ? "Submitting…" : "Submit Registration"}
               </button>
@@ -646,9 +657,9 @@ export default function RegisterPage() {
           </div>
 
           {/* Footer link */}
-          <p className="text-center text-xs text-[#6b7280] pt-1">
+          <p className="text-center text-xs text-white/40 pt-1">
             Already have an account?{" "}
-            <Link href="/login" className="text-[#2563eb] font-medium hover:underline">
+            <Link href="/login" className="text-violet-400 font-medium hover:text-violet-300 transition">
               Sign in
             </Link>
           </p>

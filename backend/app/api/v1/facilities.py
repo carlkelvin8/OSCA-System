@@ -36,7 +36,7 @@ async def list_facilities(
     result = await db.execute(query)
     items = [FacilityRead.model_validate(r) for r in result.scalars().all()]
 
-    return PaginatedResponse(items=items, total=total, page=page, page_size=page_size)
+    return PaginatedResponse(items=items, total=total, page=page, page_size=page_size, pages=(total + page_size - 1) // page_size)
 
 
 @router.post("", response_model=FacilityRead, status_code=status.HTTP_201_CREATED, summary="Create facility (Admin)")

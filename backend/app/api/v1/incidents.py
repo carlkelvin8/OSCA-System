@@ -43,7 +43,7 @@ async def list_incidents(
     result = await db.execute(query)
     items = [IncidentRead.model_validate(r) for r in result.scalars().all()]
 
-    return PaginatedResponse(items=items, total=total, page=page, page_size=page_size)
+    return PaginatedResponse(items=items, total=total, page=page, page_size=page_size, pages=(total + page_size - 1) // page_size)
 
 
 @router.post("", response_model=IncidentRead, status_code=status.HTTP_201_CREATED, summary="Report incident")
