@@ -269,14 +269,17 @@ export default function AttendancePage() {
   });
 
   const activityColors: Record<string, string> = {
-    practice:    "bg-blue-100 text-blue-800",
-    competition: "bg-red-100 text-red-800",
-    training:    "bg-green-100 text-green-800",
-    event:       "bg-purple-100 text-purple-800",
-    other:       "bg-gray-100 text-gray-800",
+    practice:    "bg-blue-50 text-blue-700 border border-blue-200",
+    competition: "bg-red-50 text-red-700 border border-red-200",
+    training:    "bg-emerald-50 text-emerald-700 border border-emerald-200",
+    event:       "bg-purple-50 text-purple-700 border border-purple-200",
+    other:       "bg-gray-50 text-gray-700 border border-gray-200",
   };
 
   const totalPages = data?.pages ?? 1;
+  const totalSessions = data?.total ?? 0;
+  const activeSessions = data?.items?.filter(s => s.is_active).length ?? 0;
+  const totalAttendance = data?.items?.reduce((sum, s) => sum + s.attendance_count, 0) ?? 0;
 
   return (
     <>
@@ -286,32 +289,70 @@ export default function AttendancePage() {
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">Attendance</h1>
-            <p className="text-sm text-gray-500">
+            <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2.5">
+              <div className="w-9 h-9 bg-[#1E3A5F]/10 rounded-xl flex items-center justify-center">
+                <CalendarCheck size={18} className="text-[#1E3A5F]" />
+              </div>
+              Attendance
+            </h1>
+            <p className="text-sm text-gray-500 mt-1">
               {(isCoach || isStudent) && userSport
                 ? `Sessions for ${userSport}`
-                : "Manage sessions and view attendance records"}
+                : "Manage sessions and track attendance records"}
             </p>
           </div>
           <div className="flex gap-2">
             {isCoach && (
               <Link
                 href="/dashboard/attendance/roster"
-                className="flex items-center gap-2 px-4 py-2 text-sm border border-gray-200 rounded-lg hover:bg-gray-50 transition"
+                className="flex items-center gap-2 px-4 py-2.5 text-sm border border-gray-200 rounded-xl hover:bg-gray-50 transition font-medium text-gray-700"
               >
-                <Users size={16} /> Player Roster
+                <Users size={16} /> Roster
               </Link>
             )}
             {!isStudent && (
               <button
                 onClick={() => setShowNewSession(true)}
-                className="flex items-center gap-2 px-4 py-2 text-sm bg-[#1E3A5F] text-white rounded-lg hover:bg-[#16304f] transition"
+                className="flex items-center gap-2 px-5 py-2.5 text-sm bg-gradient-to-r from-[#1E3A5F] to-[#2d4a73] text-white rounded-xl hover:from-[#16304f] hover:to-[#1E3A5F] transition shadow-md shadow-[#1E3A5F]/20 font-medium"
               >
                 <Plus size={16} /> New Session
               </button>
             )}
           </div>
         </div>
+
+        {/* Stats Cards */}
+        {!isStudent && (
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="bg-white rounded-xl border border-gray-100 p-5 shadow-sm hover:shadow-md transition">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">Total Sessions</p>
+                  <p className="text-2xl font-bold text-gray-900 mt-1">{totalSessions}</p>
+                </div>
+                <div className="w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center"><CalendarCheck size={20} className="text-blue-600" /></div>
+              </div>
+            </div>
+            <div className="bg-white rounded-xl border border-gray-100 p-5 shadow-sm hover:shadow-md transition">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">Active Now</p>
+                  <p className="text-2xl font-bold text-emerald-600 mt-1">{activeSessions}</p>
+                </div>
+                <div className="w-10 h-10 bg-emerald-50 rounded-xl flex items-center justify-center"><CheckCircle2 size={20} className="text-emerald-600" /></div>
+              </div>
+            </div>
+            <div className="bg-white rounded-xl border border-gray-100 p-5 shadow-sm hover:shadow-md transition">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">Total Scans</p>
+                  <p className="text-2xl font-bold text-[#1E3A5F] mt-1">{totalAttendance}</p>
+                </div>
+                <div className="w-10 h-10 bg-indigo-50 rounded-xl flex items-center justify-center"><Users size={20} className="text-indigo-600" /></div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Student tabs */}
         {isStudent && (
@@ -338,17 +379,17 @@ export default function AttendancePage() {
         {/* ── Sessions tab (default for all, or when tab = sessions) ── */}
         {(!isStudent || activeTab === "sessions") && (
           <>
-            <div className="bg-white rounded-xl shadow-sm overflow-hidden">
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
               <table className="w-full text-sm">
-                <thead className="bg-[#1E3A5F] text-white">
-                  <tr>
-                    <th className="px-4 py-3 text-left font-medium">Session Name</th>
-                    <th className="px-4 py-3 text-left font-medium">Activity</th>
-                    <th className="px-4 py-3 text-left font-medium">Sport/Art</th>
-                    <th className="px-4 py-3 text-left font-medium">Date & Time</th>
-                    <th className="px-4 py-3 text-center font-medium">Attendance</th>
-                    <th className="px-4 py-3 text-center font-medium">Status</th>
-                    <th className="px-4 py-3 text-center font-medium">Action</th>
+                <thead>
+                  <tr className="bg-gradient-to-r from-[#1E3A5F] to-[#2d4a73] text-white">
+                    <th className="px-5 py-3.5 text-left font-semibold text-[11px] uppercase tracking-wider">Session Name</th>
+                    <th className="px-5 py-3.5 text-left font-semibold text-[11px] uppercase tracking-wider">Activity</th>
+                    <th className="px-5 py-3.5 text-left font-semibold text-[11px] uppercase tracking-wider">Sport/Art</th>
+                    <th className="px-5 py-3.5 text-left font-semibold text-[11px] uppercase tracking-wider">Date & Time</th>
+                    <th className="px-5 py-3.5 text-center font-semibold text-[11px] uppercase tracking-wider">Attendance</th>
+                    <th className="px-5 py-3.5 text-center font-semibold text-[11px] uppercase tracking-wider">Status</th>
+                    <th className="px-5 py-3.5 text-center font-semibold text-[11px] uppercase tracking-wider">Action</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
@@ -389,7 +430,8 @@ export default function AttendancePage() {
                         {session.attendance_count}
                       </td>
                       <td className="px-4 py-3 text-center">
-                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${session.is_active ? "bg-green-100 text-green-800" : "bg-gray-100 text-gray-500"}`}>
+                        <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold ${session.is_active ? "bg-emerald-50 text-emerald-700 border border-emerald-200" : "bg-gray-50 text-gray-500 border border-gray-200"}`}>
+                          <span className={`w-1.5 h-1.5 rounded-full ${session.is_active ? "bg-emerald-500" : "bg-gray-400"}`} />
                           {session.is_active ? "Active" : "Closed"}
                         </span>
                       </td>

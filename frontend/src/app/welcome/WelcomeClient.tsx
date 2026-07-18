@@ -220,14 +220,42 @@ export default function WelcomeClient() {
       {/* Footer */}
       <footer className={s.footer}>
         <div className={s.footerInner}>
-          <div className={s.footerLeft}>
-            <a href="mailto:osca@naap.edu.ph">📧 osca@naap.edu.ph</a>
-            <a href="#">📍 NAAP Main Campus</a>
+          <div className={s.footerTop}>
+            <div className={s.footerBrand}>
+              <div className={s.footerLogo}>O</div>
+              <div>
+                <div className={s.footerBrandName}>OSCA System</div>
+                <div className={s.footerBrandSub}>Office of Sports & Cultural Affairs</div>
+              </div>
+            </div>
+            <div className={s.footerLinks}>
+              <div className={s.footerCol}>
+                <h4 className={s.footerColTitle}>System</h4>
+                <Link href="/login">Sign In</Link>
+                <Link href="/register">Register</Link>
+                <a href="#home">Home</a>
+              </div>
+              <div className={s.footerCol}>
+                <h4 className={s.footerColTitle}>Features</h4>
+                <a href="#aboutus">Facial Recognition</a>
+                <a href="#aboutus">QR Attendance</a>
+                <a href="#aboutus">Inventory</a>
+              </div>
+              <div className={s.footerCol}>
+                <h4 className={s.footerColTitle}>Contact</h4>
+                <a href="mailto:osca@naap.edu.ph">osca@naap.edu.ph</a>
+                <a href="#">NAAP Main Campus</a>
+                <a href="#">Villamor, Philippines</a>
+              </div>
+            </div>
           </div>
-          <div className={s.footerRight}>
-            <span>© 2024 OSCA – NAAP</span>
-            <a href="#">Privacy</a>
-            <a href="#">Terms</a>
+          <div className={s.footerBottom}>
+            <span>© 2024 OSCA – National Aviation Academy of Philippines. All rights reserved.</span>
+            <div className={s.footerBottomLinks}>
+              <a href="#">Privacy Policy</a>
+              <a href="#">Terms of Service</a>
+              <a href="#">Contact Us</a>
+            </div>
           </div>
         </div>
       </footer>

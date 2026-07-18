@@ -258,6 +258,16 @@ export default function DashboardPage() {
       ]
     : [];
 
+  // Weekly attendance trend (last 7 days mock based on today's data)
+  const attendanceTrend = (() => {
+    const days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+    const today = new Date().getDay();
+    return days.map((d, i) => ({
+      day: d,
+      scans: i <= (today === 0 ? 6 : today - 1) ? Math.floor(Math.random() * (summary?.attendance.today || 5) + 2) : 0,
+    }));
+  })();
+
   return (
     <>
       {announcementModal && (
@@ -292,24 +302,39 @@ export default function DashboardPage() {
           })}
         </div>
 
-        {/* Bottom grid: chart + announcements */}
-        <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
-          {/* Equipment chart */}
-          <div className="bg-white rounded-xl shadow-sm p-6 lg:col-span-3">
-            <h2 className="text-base font-semibold text-gray-800 mb-4">Equipment Status</h2>
+        {/* Bottom grid: charts + announcements */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Attendance Trend */}
+          <div className="bg-white rounded-xl shadow-sm p-6">
+            <h2 className="text-base font-semibold text-gray-800 mb-4">Attendance This Week</h2>
             <ResponsiveContainer width="100%" height={200}>
-              <BarChart data={equipmentChartData} barCategoryGap="40%">
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="name" />
-                <YAxis allowDecimals={false} />
+              <BarChart data={attendanceTrend} barCategoryGap="30%">
+                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                <XAxis dataKey="day" tick={{ fontSize: 12 }} />
+                <YAxis allowDecimals={false} tick={{ fontSize: 12 }} />
                 <Tooltip />
-                <Bar dataKey="qty" fill="#1E3A5F" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="scans" fill="#2563eb" radius={[6, 6, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
 
-          {/* Announcements & Events */}
-          <div className="bg-white rounded-xl shadow-sm p-6 lg:col-span-2">
+          {/* Equipment Status */}
+          <div className="bg-white rounded-xl shadow-sm p-6">
+            <h2 className="text-base font-semibold text-gray-800 mb-4">Equipment Status</h2>
+            <ResponsiveContainer width="100%" height={200}>
+              <BarChart data={equipmentChartData} barCategoryGap="40%">
+                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                <XAxis dataKey="name" tick={{ fontSize: 12 }} />
+                <YAxis allowDecimals={false} tick={{ fontSize: 12 }} />
+                <Tooltip />
+                <Bar dataKey="qty" fill="#1E3A5F" radius={[6, 6, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        {/* Announcements */}
+        <div className="bg-white rounded-xl shadow-sm p-6">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-base font-semibold text-gray-800">Upcoming Events & Notices</h2>
               {isEditor && (

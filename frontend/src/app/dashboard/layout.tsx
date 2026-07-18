@@ -1,13 +1,10 @@
 "use client";
 
 /**
- * Dashboard shell — Direction 1: Clean Professional
- * Dark navy sidebar (#0f172a), blue active item (#2563eb),
- * white topbar with breadcrumb + user avatar, light content bg (#f5f6f8).
- * Aligned to OSCA PRD v2 frontend spec.
+ * Dashboard shell — Clean Professional with Dark Mode support
  */
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
 import {
@@ -26,8 +23,15 @@ import {
   ShieldCheck,
   AlertTriangle,
   Gavel,
+  TrendingUp,
+  Moon,
+  Sun,
+  Menu,
+  X,
 } from "lucide-react";
 import { useAuthStore } from "@/store/useAuthStore";
+import { useThemeStore } from "@/store/useThemeStore";
+import { useNotificationStore } from "@/store/useNotificationStore";
 import { OfflineBanner } from "@/components/ui/OfflineBanner";
 import type { UserRole } from "@/types";
 
@@ -96,6 +100,12 @@ const navItems: NavItem[] = [
       href: "/dashboard/reports",
       label: "Reports",
       icon: BarChart3,
+      roles: ["admin", "director", "coach"],
+    },
+    {
+      href: "/dashboard/analytics",
+      label: "Analytics",
+      icon: TrendingUp,
       roles: ["admin", "director", "coach"],
     },
     {
@@ -169,9 +179,13 @@ function useBreadcrumb(pathname: string) {
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { user, isAuthenticated, isLoading, logout, fetchCurrentUser } = useAuthStore();
+  const { isDark, toggle: toggleTheme } = useThemeStore();
+  const { notifications, unreadCount, markAllRead } = useNotificationStore();
   const router = useRouter();
   const pathname = usePathname();
   const crumbs = useBreadcrumb(pathname);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [notifOpen, setNotifOpen] = useState(false);
 
   useEffect(() => {
     fetchCurrentUser();
@@ -187,7 +201,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   // Show spinner while auth is resolving (isLoading) or user not yet loaded
   if (isLoading || (!isAuthenticated && user === null)) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[#f5f6f8]">
+      <div className={`min-h-screen flex items-center justify-center ${isDark ? "bg-[#0f1219]" : "bg-[#f5f6f8]"}`}>
         <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-[#2563eb]" />
       </div>
     );
@@ -208,18 +222,30 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     (user.first_name?.[0] ?? "") + (user.last_name?.[0] ?? "");
 
   return (
-    <div className="flex h-screen bg-[#f5f6f8]">
+    <div className={`flex h-screen ${isDark ? "bg-[#0f1219]" : "bg-[#f5f6f8]"}`}>
+      {/* ── Mobile Menu Overlay ── */}
+      {mobileMenuOpen && (
+        <div className="fixed inset-0 z-50 lg:hidden" onClick={() => setMobileMenuOpen(false)}>
+          <div className="absolute inset-0 bg-black/50" />
+        </div>
+      )}
+
       {/* ── Sidebar ───────────────────────────────────────────────────────── */}
-      <aside className="w-52 bg-[#0f172a] text-white flex flex-col shrink-0">
+      <aside className={`${mobileMenuOpen ? "translate-x-0" : "-translate-x-full"} lg:translate-x-0 fixed lg:static inset-y-0 left-0 z-50 w-52 bg-[#0f172a] text-white flex flex-col shrink-0 transition-transform duration-300`}>
         {/* Brand */}
-        <div className="flex items-center gap-2.5 px-4 py-4 border-b border-white/8">
-          <div className="w-9 h-9 rounded-lg bg-[#2563eb] flex items-center justify-center text-white font-bold text-lg shrink-0">
-            O
+        <div className="flex items-center justify-between px-4 py-4 border-b border-white/8">
+          <div className="flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-lg bg-[#2563eb] flex items-center justify-center text-white font-bold text-lg shrink-0">
+              O
+            </div>
+            <div>
+              <p className="text-sm font-bold text-[#f8fafc] leading-tight">OSCA System</p>
+              <p className="text-[11px] text-[#94a3b8]">NAAP-Villamor</p>
+            </div>
           </div>
-          <div>
-            <p className="text-sm font-bold text-[#f8fafc] leading-tight">OSCA System</p>
-            <p className="text-[11px] text-[#94a3b8]">NAAP-Villamor</p>
-          </div>
+          <button onClick={() => setMobileMenuOpen(false)} className="lg:hidden p-1 text-white/50 hover:text-white">
+            <X size={18} />
+          </button>
         </div>
 
         {/* Nav */}
@@ -299,14 +325,19 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       {/* ── Main area ─────────────────────────────────────────────────────── */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Topbar */}
-        <header className="h-12 bg-white border-b border-[#e5e7eb] flex items-center px-6 gap-3 shrink-0">
+        <header className={`h-14 ${isDark ? "bg-[#1a1f2e] border-[#2a2f3e]" : "bg-white border-[#e5e7eb]"} border-b flex items-center px-4 lg:px-6 gap-3 shrink-0`}>
+          {/* Mobile menu button */}
+          <button onClick={() => setMobileMenuOpen(true)} className="lg:hidden p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-white/5 text-gray-600">
+            <Menu size={20} />
+          </button>
+
           {/* Breadcrumb */}
           <nav className="flex items-center gap-1.5 text-xs text-[#6b7280] flex-1 min-w-0">
             {crumbs.map((crumb, i) => (
               <span key={crumb.href} className="flex items-center gap-1.5">
                 {i > 0 && <ChevronRight size={12} className="text-[#d1d5db]" />}
                 {i === crumbs.length - 1 ? (
-                  <span className="font-medium text-[#111827]">{crumb.label}</span>
+                  <span className={`font-medium ${isDark ? "text-white" : "text-[#111827]"}`}>{crumb.label}</span>
                 ) : (
                   <Link href={crumb.href} className="hover:text-[#374151] transition-colors">
                     {crumb.label}
@@ -317,12 +348,56 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </nav>
 
           {/* Right side */}
-          <div className="flex items-center gap-2.5">
-            <button className="relative w-8 h-8 flex items-center justify-center text-[#6b7280] hover:bg-[#f3f4f6] rounded-full transition-colors">
-              <Bell size={16} />
-              {/* Dot indicator — can be wired to a notification count */}
-              <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 border-2 border-white rounded-full" />
+          <div className="flex items-center gap-2">
+            {/* Dark mode toggle */}
+            <button
+              onClick={toggleTheme}
+              className={`w-8 h-8 flex items-center justify-center rounded-lg transition-colors ${isDark ? "text-yellow-400 hover:bg-white/5" : "text-gray-500 hover:bg-gray-100"}`}
+              title={isDark ? "Light mode" : "Dark mode"}
+            >
+              {isDark ? <Sun size={16} /> : <Moon size={16} />}
             </button>
+
+            {/* Notifications */}
+            <div className="relative">
+              <button
+                onClick={() => setNotifOpen(!notifOpen)}
+                className={`relative w-8 h-8 flex items-center justify-center rounded-lg transition-colors ${isDark ? "text-gray-400 hover:bg-white/5" : "text-gray-500 hover:bg-gray-100"}`}
+              >
+                <Bell size={16} />
+                {unreadCount > 0 && (
+                  <span className="absolute top-0.5 right-0.5 w-4 h-4 bg-red-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center">
+                    {unreadCount > 9 ? "9+" : unreadCount}
+                  </span>
+                )}
+              </button>
+
+              {/* Notification dropdown */}
+              {notifOpen && (
+                <div className={`absolute right-0 top-10 w-80 rounded-xl shadow-xl border z-50 ${isDark ? "bg-[#1a1f2e] border-[#2a2f3e]" : "bg-white border-gray-200"}`}>
+                  <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
+                    <span className={`text-sm font-semibold ${isDark ? "text-white" : "text-gray-900"}`}>Notifications</span>
+                    {unreadCount > 0 && (
+                      <button onClick={markAllRead} className="text-xs text-blue-600 hover:underline">Mark all read</button>
+                    )}
+                  </div>
+                  <div className="max-h-64 overflow-y-auto">
+                    {notifications.length === 0 ? (
+                      <p className="text-sm text-gray-400 text-center py-6">No notifications</p>
+                    ) : (
+                      notifications.slice(0, 10).map((n) => (
+                        <div key={n.id} className={`px-4 py-3 border-b last:border-0 ${!n.read ? (isDark ? "bg-blue-900/10" : "bg-blue-50/50") : ""} ${isDark ? "border-[#2a2f3e]" : "border-gray-50"}`}>
+                          <p className={`text-sm font-medium ${isDark ? "text-white" : "text-gray-900"}`}>{n.title}</p>
+                          <p className={`text-xs ${isDark ? "text-gray-400" : "text-gray-500"} mt-0.5`}>{n.message}</p>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Avatar */}
             <div className="w-8 h-8 rounded-full bg-[#2563eb] flex items-center justify-center text-white text-xs font-semibold">
               {initials.toUpperCase() || "?"}
             </div>
@@ -333,8 +408,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         <OfflineBanner />
 
         {/* Page content */}
-        <main className="flex-1 overflow-auto">
-          <div className="p-6">{children}</div>
+        <main className={`flex-1 overflow-auto ${isDark ? "bg-[#0f1219]" : ""}`}>
+          <div className="p-4 lg:p-6">{children}</div>
         </main>
       </div>
     </div>
