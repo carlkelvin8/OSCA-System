@@ -15,17 +15,32 @@ const loginSchema = z.object({
 type LoginForm = z.infer<typeof loginSchema>;
 
 function FloatingParticles() {
+  const [particles, setParticles] = useState<Array<{ left: string; top: string; delay: string; duration: string }>>([]);
+
+  useEffect(() => {
+    setParticles(
+      Array.from({ length: 30 }).map(() => ({
+        left: `${Math.random() * 100}%`,
+        top: `${Math.random() * 100}%`,
+        delay: `${Math.random() * 8}s`,
+        duration: `${6 + Math.random() * 8}s`,
+      }))
+    );
+  }, []);
+
+  if (particles.length === 0) return null;
+
   return (
     <div className="absolute inset-0 overflow-hidden pointer-events-none">
-      {Array.from({ length: 30 }).map((_, i) => (
+      {particles.map((p, i) => (
         <div
           key={i}
           className="absolute w-1 h-1 bg-violet-400/30 rounded-full animate-float"
           style={{
-            left: `${Math.random() * 100}%`,
-            top: `${Math.random() * 100}%`,
-            animationDelay: `${Math.random() * 8}s`,
-            animationDuration: `${6 + Math.random() * 8}s`,
+            left: p.left,
+            top: p.top,
+            animationDelay: p.delay,
+            animationDuration: p.duration,
           }}
         />
       ))}
