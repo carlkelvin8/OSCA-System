@@ -186,6 +186,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const crumbs = useBreadcrumb(pathname);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
   useEffect(() => {
     fetchCurrentUser();
@@ -222,7 +223,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     (user.first_name?.[0] ?? "") + (user.last_name?.[0] ?? "");
 
   return (
-    <div className={`flex h-screen ${isDark ? "bg-[#0f1219]" : "bg-[#f5f6f8]"}`}>
+    <div className={`flex h-screen ${isDark ? "dark bg-[#0f1219]" : "bg-[#f5f6f8]"}`}>
       {/* ── Mobile Menu Overlay ── */}
       {mobileMenuOpen && (
         <div className="fixed inset-0 z-50 lg:hidden" onClick={() => setMobileMenuOpen(false)}>
@@ -313,7 +314,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             </div>
           </Link>
           <button
-            onClick={handleLogout}
+            onClick={() => setShowLogoutConfirm(true)}
             className="w-full flex items-center gap-2.5 px-3 py-2 text-[13px] text-[#94a3b8] hover:text-white hover:bg-white/6 rounded-lg transition-colors"
           >
             <LogOut size={15} className="shrink-0" />
@@ -321,6 +322,27 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </button>
         </div>
       </aside>
+
+      {/* Logout Confirmation Modal */}
+      {showLogoutConfirm && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => setShowLogoutConfirm(false)}>
+          <div className={`${isDark ? "bg-[#1a1f2e] border border-[#2a3040]" : "bg-white"} rounded-2xl shadow-2xl p-6 w-full max-w-sm mx-4`} onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 bg-red-100 rounded-xl flex items-center justify-center">
+                <LogOut size={20} className="text-red-600" />
+              </div>
+              <div>
+                <h3 className={`font-bold ${isDark ? "text-white" : "text-gray-900"}`}>Sign Out</h3>
+                <p className={`text-sm ${isDark ? "text-gray-400" : "text-gray-500"}`}>Are you sure you want to sign out?</p>
+              </div>
+            </div>
+            <div className="flex gap-3 mt-5">
+              <button onClick={() => setShowLogoutConfirm(false)} className={`flex-1 px-4 py-2.5 text-sm font-medium rounded-xl transition ${isDark ? "text-gray-300 bg-[#2a3040] hover:bg-[#353d4f]" : "text-gray-700 bg-gray-100 hover:bg-gray-200"}`}>Cancel</button>
+              <button onClick={handleLogout} className="flex-1 px-4 py-2.5 text-sm font-medium text-white bg-red-600 rounded-xl hover:bg-red-700 transition">Sign Out</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Main area ─────────────────────────────────────────────────────── */}
       <div className="flex-1 flex flex-col overflow-hidden">

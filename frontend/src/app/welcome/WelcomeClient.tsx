@@ -143,13 +143,6 @@ export default function WelcomeClient() {
           <Link href="/register" className={s.ctaSecondary}>Create Account →</Link>
         </motion.div>
 
-        <motion.div className={s.stats} initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 1.4 }}>
-          <div className={s.stat}><div className={s.statVal}><Counter value={500} suffix="+" /></div><div className={s.statLbl}>Athletes</div></div>
-          <div className={s.statDiv} />
-          <div className={s.stat}><div className={s.statVal}><Counter value={15} /></div><div className={s.statLbl}>Programs</div></div>
-          <div className={s.statDiv} />
-          <div className={s.stat}><div className={s.statVal}><Counter value={98} suffix="%" /></div><div className={s.statLbl}>Accuracy</div></div>
-        </motion.div>
 
         <motion.div className={s.scrollHint} animate={{ y: [0, 8, 0], opacity: [0.4, 0.8, 0.4] }} transition={{ duration: 2.5, repeat: Infinity }}>
           <div className={s.scrollMouse}><div className={s.scrollDot} /></div>

@@ -386,13 +386,12 @@ export default function DashboardPage() {
               </div>
             )}
           </div>
-        </div>
 
-        <p className="text-xs text-gray-400 text-right">
-          Last updated:{" "}
-          {summary ? new Date(summary.generated_at).toLocaleString("en-PH") : "—"}
-        </p>
-      </div>
-    </>
-  );
+          <p className="text-xs text-gray-400 text-right">
+            Last updated:{" "}
+            {summary ? new Date(summary.generated_at).toLocaleString("en-PH") : "—"}
+          </p>
+        </div>
+      </>
+    );
 }
