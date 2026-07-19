@@ -4,11 +4,10 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { motion, useScroll, useSpring } from "framer-motion";
-import s from "./page.module.css";
 
+/* ═══ STAR FIELD ═══ */
 function StarField() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const mouse = useRef({ x: 0, y: 0 });
   useEffect(() => {
     const c = canvasRef.current;
     if (!c) return;
@@ -17,238 +16,188 @@ function StarField() {
     let id: number;
     const resize = () => { c.width = innerWidth; c.height = innerHeight; };
     resize(); addEventListener("resize", resize);
-    addEventListener("mousemove", (e) => { mouse.current = { x: e.clientX, y: e.clientY }; });
-    const stars: { x: number; y: number; vx: number; vy: number; r: number; o: number; t: number; sp: number }[] = [];
-    for (let i = 0; i < 100; i++) stars.push({ x: Math.random() * c.width, y: Math.random() * c.height, vx: (Math.random() - 0.5) * 0.3, vy: (Math.random() - 0.5) * 0.3, r: Math.random() * 2 + 0.5, o: Math.random() * 0.7 + 0.2, t: Math.random() * Math.PI * 2, sp: Math.random() * 0.015 + 0.005 });
+    const stars: { x: number; y: number; r: number; o: number; t: number; sp: number }[] = [];
+    for (let i = 0; i < 80; i++) stars.push({ x: Math.random() * c.width, y: Math.random() * c.height, r: Math.random() * 1.5 + 0.5, o: Math.random() * 0.5 + 0.1, t: Math.random() * Math.PI * 2, sp: Math.random() * 0.01 + 0.003 });
     const draw = () => {
       ctx.clearRect(0, 0, c.width, c.height);
-      const { x: mx, y: my } = mouse.current;
-      for (let i = 0; i < stars.length; i++) {
-        const p = stars[i]; p.t += p.sp;
-        const dx = mx - p.x, dy = my - p.y, dist = Math.hypot(dx, dy);
-        if (dist < 140) { p.vx -= (dx / dist) * 0.015; p.vy -= (dy / dist) * 0.015; }
-        p.x += p.vx; p.y += p.vy; p.vx *= 0.99; p.vy *= 0.99;
-        if (p.x < 0) p.x = c.width; if (p.x > c.width) p.x = 0;
-        if (p.y < 0) p.y = c.height; if (p.y > c.height) p.y = 0;
-        const fl = p.o * (0.6 + 0.4 * Math.sin(p.t));
-        const g = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.r * 3);
-        g.addColorStop(0, `rgba(167,139,250,${fl})`); g.addColorStop(1, "transparent");
-        ctx.beginPath(); ctx.arc(p.x, p.y, p.r * 3, 0, Math.PI * 2); ctx.fillStyle = g; ctx.fill();
-        ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2); ctx.fillStyle = `rgba(255,255,255,${fl})`; ctx.fill();
-        for (let j = i + 1; j < stars.length; j++) {
-          const q = stars[j]; const d = Math.hypot(p.x - q.x, p.y - q.y);
-          if (d < 90) { ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(q.x, q.y); ctx.strokeStyle = `rgba(139,92,246,${0.12 * (1 - d / 90)})`; ctx.lineWidth = 0.4; ctx.stroke(); }
-        }
+      for (const p of stars) {
+        p.t += p.sp;
+        const fl = p.o * (0.5 + 0.5 * Math.sin(p.t));
+        ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(201, 168, 76, ${fl})`; ctx.fill();
       }
       id = requestAnimationFrame(draw);
     };
     draw();
     return () => cancelAnimationFrame(id);
   }, []);
-  return <canvas ref={canvasRef} className={s.canvas} />;
+  return <canvas ref={canvasRef} style={{ position: "fixed", inset: 0, zIndex: 0, pointerEvents: "none" }} />;
 }
 
-function Typewriter({ words }: { words: string[] }) {
-  const [idx, setIdx] = useState(0);
-  const [text, setText] = useState("");
-  const [del, setDel] = useState(false);
-  useEffect(() => {
-    const word = words[idx];
-    const timer = setTimeout(() => {
-      if (!del) { setText(word.slice(0, text.length + 1)); if (text.length + 1 === word.length) setTimeout(() => setDel(true), 2000); }
-      else { setText(word.slice(0, text.length - 1)); if (text.length === 0) { setDel(false); setIdx((i) => (i + 1) % words.length); } }
-    }, del ? 40 : 80);
-    return () => clearTimeout(timer);
-  }, [text, del, idx, words]);
-  return <>{text}<span className={s.cursor} /></>;
-}
-
-function Counter({ value, suffix = "" }: { value: number; suffix?: string }) {
-  const [count, setCount] = useState(0);
-  const [on, setOn] = useState(false);
-  const ref = useRef<HTMLSpanElement>(null);
-  useEffect(() => {
-    const el = ref.current; if (!el) return;
-    const obs = new IntersectionObserver(([e]) => { if (e.isIntersecting) setOn(true); }, { threshold: 0.5 });
-    obs.observe(el); return () => obs.disconnect();
-  }, []);
-  useEffect(() => {
-    if (!on) return;
-    const t0 = performance.now();
-    const step = (now: number) => { const p = Math.min((now - t0) / 2000, 1); setCount(Math.floor((1 - Math.pow(1 - p, 4)) * value)); if (p < 1) requestAnimationFrame(step); };
-    requestAnimationFrame(step);
-  }, [on, value]);
-  return <span ref={ref}>{count}{suffix}</span>;
-}
-
+/* ═══ MAIN PAGE ═══ */
 export default function WelcomeClient() {
   const { scrollYProgress } = useScroll();
   const scaleX = useSpring(scrollYProgress, { stiffness: 50, damping: 20 });
 
-  const features = [
-    { icon: "🔐", title: "Facial Recognition", desc: "AI-powered biometric attendance via InsightFace deep learning" },
-    { icon: "📱", title: "QR Code System", desc: "Instant check-in with dynamic QR codes for events" },
-    { icon: "📦", title: "Smart Inventory", desc: "Real-time equipment tracking with barcode scanning" },
-    { icon: "📊", title: "Live Analytics", desc: "Beautiful dashboards with real-time data insights" },
-    { icon: "🛡️", title: "Enterprise Security", desc: "Role-based access control and full audit trail" },
-    { icon: "⚡", title: "Lightning Fast", desc: "Next.js 15 + FastAPI + Redis for instant responses" },
-  ];
-
   return (
-    <div className={s.page}>
+    <div style={{ fontFamily: "'Inter', system-ui, sans-serif", background: "#0a1628", color: "#fff", minHeight: "100vh", position: "relative", overflowX: "hidden" }}>
       <StarField />
-      <div className={s.aurora}><div className={s.blob1} /><div className={s.blob2} /><div className={s.blob3} /></div>
-      <motion.div className={s.progressBar} style={{ scaleX }} />
+      {/* Progress bar */}
+      <motion.div style={{ scaleX, position: "fixed", top: 0, left: 0, right: 0, height: 3, background: "linear-gradient(90deg, #C9A84C, #f5d778)", zIndex: 999, transformOrigin: "left" }} />
 
-      {/* Navbar */}
-      <motion.nav className={s.navbar} initial={{ y: -80, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1] }}>
-        <div className={s.navInner}>
-          <div className={s.navBrand}>
-            <div className={s.navLogo}>O</div>
-            <div><div className={s.navTitle}>OSCA System</div><div className={s.navSub}>NAAP · Villamor</div></div>
+      {/* ─── NAVBAR ─── */}
+      <motion.nav
+        initial={{ y: -60, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ duration: 0.7 }}
+        style={{ position: "sticky", top: 0, zIndex: 100, background: "rgba(10,22,40,0.9)", backdropFilter: "blur(12px)", borderBottom: "1px solid rgba(201,168,76,0.15)", padding: "12px 24px" }}
+      >
+        <div style={{ maxWidth: 1200, margin: "0 auto", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <Image src="/osca-logo.png" alt="OSCA" width={44} height={44} style={{ borderRadius: "50%" }} priority />
+            <div>
+              <p style={{ fontWeight: 700, fontSize: 15, color: "#C9A84C" }}>OSCA System</p>
+              <p style={{ fontSize: 10, color: "rgba(255,255,255,0.4)" }}>NAAP · Villamor Campus</p>
+            </div>
           </div>
-          <div className={s.navBtns}>
-            <Link href="/login" className={s.btnOutline}>Sign In</Link>
-            <Link href="/register" className={s.btnFill}>Register</Link>
+          <div style={{ display: "flex", gap: 10 }}>
+            <Link href="/login" style={{ padding: "8px 20px", fontSize: 12, fontWeight: 600, color: "#C9A84C", border: "1px solid rgba(201,168,76,0.4)", borderRadius: 10, textDecoration: "none" }}>Sign In</Link>
+            <Link href="/register" style={{ padding: "8px 20px", fontSize: 12, fontWeight: 600, color: "#0a1628", background: "#C9A84C", borderRadius: 10, textDecoration: "none" }}>Register</Link>
           </div>
         </div>
       </motion.nav>
 
-      {/* Hero */}
-      <section className={s.hero}>
-        <motion.div className={s.logoWrap} initial={{ scale: 0, rotate: -180 }} animate={{ scale: 1, rotate: 0 }} transition={{ type: "spring", stiffness: 80, damping: 14, delay: 0.3 }}>
-          <div className={s.logoRing} /><div className={s.logoRingBlur} />
-          <div className={s.logoInner}><Image src="/osca-logo.png" alt="OSCA" width={120} height={120} priority style={{ borderRadius: "50%", objectFit: "cover" }} /></div>
-          <div className={s.orbit1}><span /></div>
-          <div className={s.orbit2}><span /></div>
+      {/* ─── HERO ─── */}
+      <section style={{ position: "relative", zIndex: 10, minHeight: "85vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", textAlign: "center", padding: "80px 24px 60px" }}>
+        <motion.div initial={{ scale: 0, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ type: "spring", stiffness: 80, delay: 0.2 }}>
+          <div style={{ width: 130, height: 130, margin: "0 auto 32px", borderRadius: "50%", border: "3px solid #C9A84C", padding: 4, boxShadow: "0 0 40px rgba(201,168,76,0.3)" }}>
+            <Image src="/osca-logo.png" alt="OSCA Logo" width={120} height={120} style={{ borderRadius: "50%", objectFit: "cover" }} priority />
+          </div>
         </motion.div>
 
-        <motion.div className={s.badge} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.6 }}>
-          <span className={s.badgeDot} /> Office of Sports &amp; Cultural Affairs
-        </motion.div>
-
-        <motion.h1 className={s.heading} initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.8, duration: 0.7 }}>
-          Empowering<br /><span className={s.gradient}><Typewriter words={["Student Athletes", "Artists", "Champions", "Excellence"]} /></span>
+        <motion.h1 initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 }} style={{ fontSize: "clamp(28px, 5vw, 48px)", fontWeight: 900, lineHeight: 1.15, marginBottom: 16 }}>
+          Office of <span style={{ color: "#C9A84C" }}>Sports</span> and<br />Cultural Affairs
         </motion.h1>
 
-        <motion.p className={s.subtitle} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 1.0 }}>
-          Next-gen attendance &amp; inventory system with <span className={s.hl1}>AI recognition</span>, <span className={s.hl2}>real-time analytics</span>, and <span className={s.hl3}>smart automation</span>.
+        <motion.p initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.7 }} style={{ fontSize: 16, color: "rgba(255,255,255,0.6)", maxWidth: 560, lineHeight: 1.7, margin: "0 auto 36px" }}>
+          Promoting and Supporting <strong style={{ color: "#fff" }}>Student Athletes</strong> and <strong style={{ color: "#fff" }}>Artists</strong> through Quality <strong style={{ color: "#C9A84C" }}>Sports</strong> and <strong style={{ color: "#C9A84C" }}>Cultural Programs</strong>.
         </motion.p>
 
-        <motion.div className={s.ctas} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 1.2 }}>
-          <Link href="/login" className={s.ctaPrimary}>
-            <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24"><path d="M15 3h4a2 2 0 012 2v14a2 2 0 01-2 2h-4M10 17l5-5-5-5M15 12H3" /></svg>
-            Get Started
-          </Link>
-          <Link href="/register" className={s.ctaSecondary}>Create Account →</Link>
-        </motion.div>
-
-
-        <motion.div className={s.scrollHint} animate={{ y: [0, 8, 0], opacity: [0.4, 0.8, 0.4] }} transition={{ duration: 2.5, repeat: Infinity }}>
-          <div className={s.scrollMouse}><div className={s.scrollDot} /></div>
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.9 }} style={{ display: "flex", gap: 14, justifyContent: "center", flexWrap: "wrap" }}>
+          <Link href="/login" style={{ padding: "14px 36px", fontWeight: 700, fontSize: 14, color: "#0a1628", background: "#C9A84C", borderRadius: 12, textDecoration: "none", boxShadow: "0 4px 20px rgba(201,168,76,0.3)" }}>Get Started</Link>
+          <Link href="/register" style={{ padding: "14px 36px", fontWeight: 600, fontSize: 14, color: "#C9A84C", border: "1.5px solid rgba(201,168,76,0.4)", borderRadius: 12, textDecoration: "none" }}>Create Account</Link>
         </motion.div>
       </section>
 
-      {/* Features */}
-      <section className={s.section}>
-        <motion.div className={s.secHeader} initial={{ opacity: 0, y: 30 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }}>
-          <span className={s.tag}>Features</span>
-          <h2 className={s.secTitle}>Built for the <span className={s.gradient}>Future</span></h2>
-          <p className={s.secSub}>Everything you need to manage attendance and inventory with cutting-edge technology.</p>
+      {/* ─── VISION & MISSION ─── */}
+      <section style={{ position: "relative", zIndex: 10, padding: "80px 24px", maxWidth: 1000, margin: "0 auto" }}>
+        <motion.div initial={{ opacity: 0, y: 30 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} style={{ textAlign: "center", marginBottom: 48 }}>
+          <span style={{ display: "inline-block", padding: "5px 16px", fontSize: 11, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: "#C9A84C", background: "rgba(201,168,76,0.1)", border: "1px solid rgba(201,168,76,0.2)", borderRadius: 50, marginBottom: 16 }}>About OSCA</span>
+          <h2 style={{ fontSize: "clamp(24px, 3.5vw, 36px)", fontWeight: 800, marginBottom: 12 }}>Who We Are</h2>
         </motion.div>
-        <div className={s.featGrid}>
-          {features.map((f, i) => (
-            <motion.div key={i} className={s.featCard} initial={{ opacity: 0, y: 40 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: i * 0.08 }} whileHover={{ y: -6, scale: 1.02 }}>
-              <span className={s.featIcon}>{f.icon}</span>
-              <h3 className={s.featTitle}>{f.title}</h3>
-              <p className={s.featDesc}>{f.desc}</p>
-            </motion.div>
-          ))}
-        </div>
-      </section>
 
-      {/* About */}
-      <section className={s.section}>
-        <motion.div className={s.secHeader} initial={{ opacity: 0, y: 30 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }}>
-          <span className={s.tag}>About</span>
-          <h2 className={s.secTitle}>Who We Are</h2>
-          <p className={s.secSub}>Fostering excellence, discipline, and creativity.</p>
-        </motion.div>
-        <div className={s.aboutGrid}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 20 }}>
           {[
-            { icon: "🏛️", title: "About OSCA", text: "Developing holistic student athletes and artists through quality sports and cultural programs.", color: "var(--c-violet)" },
-            { icon: "🏆", title: "Mission", text: "To promote, facilitate and develop holistic student athletes and artists at all levels.", color: "var(--c-amber)" },
-            { icon: "🌟", title: "Vision", text: "To empower students to reach their full potential in sports and arts.", color: "var(--c-cyan)" },
-          ].map((c, i) => (
-            <motion.div key={i} className={s.aboutCard} initial={{ opacity: 0, y: 40 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: i * 0.12 }} whileHover={{ y: -6, scale: 1.02 }}>
-              <span className={s.aboutIcon}>{c.icon}</span>
-              <h3 className={s.aboutTitle}>{c.title}</h3>
-              <p className={s.aboutText}>{c.text}</p>
+            { title: "Vision", icon: "🌟", text: "To empower students to reach their full potential in sports and arts, fostering excellence, discipline, and creativity." },
+            { title: "Mission", icon: "🏆", text: "To promote, facilitate and develop holistic student athletes and artists at all levels of competition and performance." },
+            { title: "About", icon: "🏛️", text: "The Office of Sports and Cultural Affairs is committed to providing access to quality sports and cultural trainings, practices, and opportunities." },
+          ].map((card, i) => (
+            <motion.div key={i} initial={{ opacity: 0, y: 30 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: i * 0.1 }} style={{ padding: "32px 24px", borderRadius: 20, background: "rgba(201,168,76,0.04)", border: "1px solid rgba(201,168,76,0.12)", textAlign: "center" }}>
+              <span style={{ fontSize: 36, display: "block", marginBottom: 16 }}>{card.icon}</span>
+              <h3 style={{ fontSize: 17, fontWeight: 700, color: "#C9A84C", marginBottom: 10 }}>{card.title}</h3>
+              <p style={{ fontSize: 14, color: "rgba(255,255,255,0.55)", lineHeight: 1.7 }}>{card.text}</p>
             </motion.div>
           ))}
         </div>
       </section>
 
-      {/* Marquee */}
-      <div className={s.marquee}>
-        <motion.div className={s.marqueeTrack} animate={{ x: ["0%", "-50%"] }} transition={{ duration: 25, repeat: Infinity, ease: "linear" }}>
-          {[...Array(2)].flatMap((_, si) => ["⚡ Facial Recognition", "📊 Analytics", "📱 QR Attendance", "🔒 Security", "📦 Inventory", "📈 Reports", "🎯 Scheduling", "🌐 Cloud"].map((t, i) => (
-            <span key={`${si}-${i}`} className={s.marqueeItem}>{t}</span>
-          )))}
+      {/* ─── OSCA PERSONNEL ─── */}
+      <section style={{ position: "relative", zIndex: 10, padding: "80px 24px", maxWidth: 1000, margin: "0 auto" }}>
+        <motion.div initial={{ opacity: 0, y: 30 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} style={{ textAlign: "center", marginBottom: 48 }}>
+          <span style={{ display: "inline-block", padding: "5px 16px", fontSize: 11, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: "#C9A84C", background: "rgba(201,168,76,0.1)", border: "1px solid rgba(201,168,76,0.2)", borderRadius: 50, marginBottom: 16 }}>OSCA Personnel</span>
+          <h2 style={{ fontSize: "clamp(24px, 3.5vw, 36px)", fontWeight: 800, marginBottom: 12 }}>Our Team</h2>
         </motion.div>
-      </div>
 
-      {/* CTA */}
-      <section className={s.ctaSection}>
-        <motion.div className={s.ctaBox} initial={{ opacity: 0, y: 40 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }}>
-          <h2 className={s.ctaTitle}>Ready to get started?</h2>
-          <p className={s.ctaSub}>Join hundreds of student athletes already using the OSCA System.</p>
-          <div className={s.ctas}>
-            <Link href="/register" className={s.ctaPrimary}>Create Your Account</Link>
-            <Link href="/login" className={s.ctaSecondary}>Sign In →</Link>
+        {/* President */}
+        <motion.div initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} style={{ textAlign: "center", marginBottom: 48 }}>
+          <div style={{ width: 80, height: 80, margin: "0 auto 12px", borderRadius: "50%", background: "linear-gradient(135deg, #C9A84C, #f5d778)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 28, fontWeight: 900, color: "#0a1628" }}>P</div>
+          <p style={{ fontSize: 16, fontWeight: 700, color: "#fff" }}>PROF. MARWIN M. DELA CRUZ, PH.D</p>
+          <p style={{ fontSize: 12, color: "#C9A84C", fontWeight: 600 }}>President of National Aviation Academy of the Philippines</p>
+        </motion.div>
+
+        {/* Director & Staff */}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))", gap: 16, marginBottom: 40 }}>
+          {[
+            { name: "ENGR. JEQ ZYRIUS A. SUDWESTE, MEA", role: "Director (interim)" },
+            { name: "MNUR KHAN D. UMPA, MA.ED.", role: "Director of Sports and Cultural Affairs Unit" },
+            { name: "JAYVEE CONDADA", role: "Office of Sports and Cultural Affairs - Staff" },
+          ].map((p, i) => (
+            <motion.div key={i} initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: i * 0.1 }} style={{ padding: "20px 16px", borderRadius: 16, background: "rgba(201,168,76,0.04)", border: "1px solid rgba(201,168,76,0.1)", textAlign: "center" }}>
+              <div style={{ width: 48, height: 48, margin: "0 auto 10px", borderRadius: "50%", background: "rgba(201,168,76,0.15)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, fontWeight: 700, color: "#C9A84C" }}>{p.name[0]}</div>
+              <p style={{ fontSize: 13, fontWeight: 700, color: "#fff" }}>{p.name}</p>
+              <p style={{ fontSize: 11, color: "rgba(255,255,255,0.5)", marginTop: 4 }}>{p.role}</p>
+            </motion.div>
+          ))}
+        </div>
+
+        {/* Sports Coaches */}
+        <motion.div initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} style={{ marginBottom: 40 }}>
+          <h3 style={{ fontSize: 14, fontWeight: 700, color: "#C9A84C", textTransform: "uppercase", letterSpacing: "0.08em", textAlign: "center", marginBottom: 20 }}>Sports Coaches</h3>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 12 }}>
+            {[
+              { name: "BERT BALAJADIA", role: "Head Coach of Taekwondo" },
+              { name: "JAYVEE CONDADA", role: "Head Coach of Volleyball - Men" },
+              { name: "RAY ALLEN CASTILLO", role: "Head Coach of Volleyball - Women" },
+              { name: "JJ MALANAY", role: "Head Coach of Arnis" },
+              { name: "ROI PAGUE", role: "Head Coach of Sepak Takraw" },
+              { name: "DENNIS PAGLIGARAN", role: "Head Coach of Basketball" },
+            ].map((coach, i) => (
+              <motion.div key={i} initial={{ opacity: 0, y: 15 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: i * 0.05 }} style={{ padding: "16px 12px", borderRadius: 12, background: "rgba(201,168,76,0.03)", border: "1px solid rgba(201,168,76,0.08)", textAlign: "center" }}>
+                <p style={{ fontSize: 12, fontWeight: 700, color: "#fff" }}>{coach.name}</p>
+                <p style={{ fontSize: 10, color: "rgba(201,168,76,0.8)", marginTop: 4 }}>{coach.role}</p>
+              </motion.div>
+            ))}
+          </div>
+        </motion.div>
+
+        {/* Trainers */}
+        <motion.div initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }}>
+          <h3 style={{ fontSize: 14, fontWeight: 700, color: "#C9A84C", textTransform: "uppercase", letterSpacing: "0.08em", textAlign: "center", marginBottom: 20 }}>Trainers</h3>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 12 }}>
+            {[
+              { name: "JONATHAN IVAN LUKE MANEJA", role: "Trainer of Musika Himpapawid" },
+              { name: "JOHANN CINCO", role: "Choir Conduction of Himig Himpapawid" },
+            ].map((trainer, i) => (
+              <motion.div key={i} initial={{ opacity: 0, y: 15 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: i * 0.05 }} style={{ padding: "16px 12px", borderRadius: 12, background: "rgba(201,168,76,0.03)", border: "1px solid rgba(201,168,76,0.08)", textAlign: "center" }}>
+                <p style={{ fontSize: 12, fontWeight: 700, color: "#fff" }}>{trainer.name}</p>
+                <p style={{ fontSize: 10, color: "rgba(201,168,76,0.8)", marginTop: 4 }}>{trainer.role}</p>
+              </motion.div>
+            ))}
           </div>
         </motion.div>
       </section>
 
-      {/* Footer */}
-      <footer className={s.footer}>
-        <div className={s.footerInner}>
-          <div className={s.footerTop}>
-            <div className={s.footerBrand}>
-              <div className={s.footerLogo}>O</div>
-              <div>
-                <div className={s.footerBrandName}>OSCA System</div>
-                <div className={s.footerBrandSub}>Office of Sports & Cultural Affairs</div>
-              </div>
-            </div>
-            <div className={s.footerLinks}>
-              <div className={s.footerCol}>
-                <h4 className={s.footerColTitle}>System</h4>
-                <Link href="/login">Sign In</Link>
-                <Link href="/register">Register</Link>
-                <a href="#home">Home</a>
-              </div>
-              <div className={s.footerCol}>
-                <h4 className={s.footerColTitle}>Features</h4>
-                <a href="#aboutus">Facial Recognition</a>
-                <a href="#aboutus">QR Attendance</a>
-                <a href="#aboutus">Inventory</a>
-              </div>
-              <div className={s.footerCol}>
-                <h4 className={s.footerColTitle}>Contact</h4>
-                <a href="mailto:osca@naap.edu.ph">osca@naap.edu.ph</a>
-                <a href="#">NAAP Main Campus</a>
-                <a href="#">Villamor, Philippines</a>
-              </div>
-            </div>
+      {/* ─── CONTACT ─── */}
+      <section style={{ position: "relative", zIndex: 10, padding: "60px 24px", maxWidth: 600, margin: "0 auto", textAlign: "center" }}>
+        <motion.div initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }}>
+          <span style={{ display: "inline-block", padding: "5px 16px", fontSize: 11, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: "#C9A84C", background: "rgba(201,168,76,0.1)", border: "1px solid rgba(201,168,76,0.2)", borderRadius: 50, marginBottom: 16 }}>Contact</span>
+          <h2 style={{ fontSize: 24, fontWeight: 800, marginBottom: 20 }}>Get in Touch</h2>
+          <div style={{ display: "flex", flexDirection: "column", gap: 12, alignItems: "center" }}>
+            <a href="mailto:osca@naap.edu.ph" style={{ fontSize: 14, color: "rgba(255,255,255,0.6)", textDecoration: "none" }}>📧 osca@naap.edu.ph</a>
+            <p style={{ fontSize: 14, color: "rgba(255,255,255,0.6)" }}>📍 National Aviation Academy of the Philippines - Main Campus, Villamor</p>
           </div>
-          <div className={s.footerBottom}>
-            <span>© 2024 OSCA – National Aviation Academy of Philippines. All rights reserved.</span>
-            <div className={s.footerBottomLinks}>
-              <a href="#">Privacy Policy</a>
-              <a href="#">Terms of Service</a>
-              <a href="#">Contact Us</a>
-            </div>
+        </motion.div>
+      </section>
+
+      {/* ─── FOOTER ─── */}
+      <footer style={{ position: "relative", zIndex: 10, borderTop: "1px solid rgba(201,168,76,0.1)", padding: "24px", textAlign: "center" }}>
+        <div style={{ maxWidth: 1000, margin: "0 auto", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <Image src="/osca-logo.png" alt="OSCA" width={28} height={28} style={{ borderRadius: "50%" }} />
+            <span style={{ fontSize: 12, fontWeight: 600, color: "#C9A84C" }}>OSCA System</span>
+          </div>
+          <p style={{ fontSize: 11, color: "rgba(255,255,255,0.25)" }}>© 2024 Office of Sports and Cultural Affairs — National Aviation Academy of the Philippines</p>
+          <div style={{ display: "flex", gap: 16 }}>
+            <a href="#" style={{ fontSize: 11, color: "rgba(255,255,255,0.3)", textDecoration: "none" }}>Privacy</a>
+            <a href="#" style={{ fontSize: 11, color: "rgba(255,255,255,0.3)", textDecoration: "none" }}>Terms</a>
           </div>
         </div>
       </footer>
